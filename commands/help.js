@@ -1,197 +1,158 @@
 const settings = require('../settings');
 const { t } = require('../lib/language');
-const { sendWithChannelButton } = require('../lib/channelButton');
-const fs = require('fs');
+const { generateWAMessageContent, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
 const path = require('path');
-const { prepareWAMessageMedia, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
+const fs = require('fs');
 
 module.exports = async (sock, chatId, msg, args, commands, userLang) => {
-    console.log(`[Help] 📥 Request for help from ${chatId}`);
     try {
-        const commandList = Array.from(commands.keys()).sort();
+        const botName = settings.botName || 'HAMZA AMIRNI';
+        const isArabic = userLang === 'ar' || userLang === 'ma';
         const prefix = settings.prefix;
 
-        const requested = args[0] ? args[0].toLowerCase() : null;
-        const islamicAliases = ['islam', 'islamic', 'deen', 'دين', 'ديني', 'اسلاميات', 'islam', 'religion'];
-        const gameAliases = ['games', 'game', 'العاب', 'لعب', 'منيو_لعب', 'menugame'];
-        const funAliases = ['fun', 'dahik', 'ضحك', 'ترفيه', 'نكت'];
-        const downloadAliases = ['download', 'tahmilat', 'tahmil', 'تحميل', 'تيليشارجي'];
-        const toolsAliases = ['tools', 'adawat', 'أدوات', 'وسائل', 'خدمات'];
-        const ownerAliases = ['owner', 'molchi', 'mol-chi', 'المالك', 'المطور'];
-        const generalAliases = ['general', '3am', 'عام', 'نظام', 'سيستم'];
-        const allAliases = ['all', 'allmenu', 'listall', 'كامل', 'كلشي'];
-        const aiAliases = ['ai', 'ذكاء', 'ذكاء_اصطناعي', 'robot', 'bot'];
-
-        // 2. Define Category Mappings
+        // 1. Define Category Mappings
         const catMap = {
             'new': ['qwen', 'nanobanana', 'edit', 'genai', 'banana-ai', 'ghibli', 'tomp3', 'resetlink', 'apk', 'apk2', 'apk3', 'hidetag', 'imdb', 'simp'],
             'religion': ['quran', 'salat', 'prayertimes', 'adhan', 'hadith', 'asmaa', 'azkar', 'qibla', 'ad3iya', 'dua', 'athan', 'tafsir', 'surah', 'ayah', 'fadlsalat', 'hukm', 'qiyam', 'danb', 'nasiha', 'tadabbur', 'sahaba', 'faida', 'hasanat', 'jumaa', 'hajj', 'sira', 'mawt', 'shirk', 'hub', 'deen'],
-            'download': ['facebook', 'instagram', 'tiktok', 'youtube', 'mediafire', 'github', 'play', 'song', 'video', 'ytplay', 'yts'],
+            'download': ['facebook', 'instagram', 'tiktok', 'youtube', 'mediafire', 'github', 'play', 'song', 'video', 'ytplay', 'yts', 'apk'],
             'ai': ['gpt4o', 'gpt4om', 'gpt4', 'gpt3', 'o1', 'gemini-analyze', 'qwen', 'gpt', 'gemini', 'deepseek', 'imagine', 'aiart', 'miramuse', 'ghibli-art', 'faceswap', 'ai-enhance', 'colorize', 'vocalremover', 'musicgen', 'hdvideo', 'winkvideo', 'unblur', 'brat-vd'],
-            'group': ['kick', 'promote', 'demote', 'tagall', 'hidetag', 'mute', 'unmute', 'close', 'open', 'delete', 'staff', 'groupinfo', 'welcome', 'goodbye', 'warn', 'warnings', 'antibadword', 'antilink'],
+            'group': ['kick', 'promote', 'demote', 'tagall', 'hidetag', 'mute', 'unmute', 'close', 'open', 'delete', 'staff', 'groupinfo', 'welcome', 'goodbye', 'warn', 'warnings', 'antibadword', 'antilink', 'schedule'],
             'tools': ['pdf2img', 'stt', 'sticker', 'sticker-alt', 'attp', 'ttp', 'ocr', 'tts', 'say', 'toimage', 'tovideo', 'togif', 'qrcode', 'ss', 'lyrics', 'calc', 'img-blur', 'translate', 'readviewonce', 'upload'],
             'news': ['news', 'akhbar', 'football', 'kora', 'weather', 'taqes'],
+            'daily': ['daily', 'top', 'shop', 'gamble', 'slots', 'profile'],
             'fun': ['joke', 'fact', 'quote', 'meme', 'character', 'truth', 'dare', 'ship', 'ngl', '4kwallpaper'],
             'games': ['menugame', 'xo', 'rps', 'math', 'guess', 'scramble', 'riddle', 'quiz', 'love', 'hangman', 'trivia'],
-            'economy': ['profile', 'daily', 'top', 'shop', 'gamble', 'slots'],
             'general': ['alive', 'ping', 'owner', 'script', 'setlang', 'system', 'help', 'allmenu'],
-            'owner': ['mode', 'devmsg', 'autoreminder', 'pmblocker', 'backup', 'ban', 'unban', 'block', 'unblock', 'cleartmp', 'sudo', 'clear', 'clearsession', 'anticall']
+            'owner': ['mode', 'devmsg', 'autoreminder', 'pmblocker', 'backup', 'ban', 'unban', 'block', 'unblock', 'cleartmp', 'sudo', 'clear', 'clearsession', 'anticall', 'admin', 'addsudo', 'delsudo', 'listadmin']
         };
 
-        const cmdIcons = {
-            'genai': '🎨', 'edit': '🪄', 'nanobanana': '🍌', 'banana-ai': '🍌', 'ghibli': '🎭', 'tomp3': '🎵', 'apk': '📱', 'apk2': '🚀', 'apk3': '🔥', 'simp': '💘',
-            'quran': '📖', 'salat': '🕌', 'prayertimes': '🕋', 'adhan': '📢', 'hadith': '📚', 'asmaa': '✨', 'azkar': '📿', 'qibla': '🧭', 'ad3iya': '🤲', 'deen': '🕌',
-            'jumaa': '📆', 'hajj': '🕋', 'sira': '🕊️', 'mawt': '⏳', 'shirk': '🛡️', 'hub': '💞', 'jannah': '🌴', 'nar': '🔥', 'qabr': '⚰️', 'qiyama': '🌋',
-            'facebook': '🔵', 'instagram': '📸', 'tiktok': '🎵', 'youtube': '🎬', 'mediafire': '📂', 'play': '🎧', 'song': '🎶', 'video': '🎥',
-            'gpt': '🤖', 'gemini': '♊', 'deepseek': '🧠', 'imagine': '🖼️', 'aiart': '🌟', 'ghibli-art': '🎨', 'remini': '✨', 'qwen': '🦄', 'gemini-analyze': '🔍',
-            'kick': '🚫', 'promote': '🆙', 'demote': '⬇️', 'tagall': '📢', 'hidetag': '👻', 'mute': '🔇', 'unmute': '🔊', 'close': '🔒', 'open': '🔓',
-            'sticker': '🖼️', 'translate': '🗣️', 'ocr': '🔍', 'qrcode': '🏁', 'weather': '🌦️', 'lyrics': '📜', 'calc': '🔢',
-            'game': '🎮', 'quiz': '🧠', 'riddle': '🧩', 'joke': '🤣', 'meme': '🐸', 'truth': '💡', 'dare': '🔥',
-            'profile': '👤', 'daily': '💰', 'top': '🏆', 'shop': '🛒',
-            'alive': '🟢', 'ping': '⚡', 'owner': '👑', 'help': '❓',
-            'brat-vd': '🎬', 'hdvideo': '📀', 'winkvideo': '📹', 'musicgen': '🎵', 'removebg': '🖼️', 'unblur': '✨', 'upload': '📤', 'readviewonce': '👁️', 'pdf2img': '📄', 'stt': '🎙️'
+        const arCmds = {
+            'gpt': 'ذكاء', 'gpt4': 'ذكاء4', 'gpt4o': 'ذكاء-برو', 'gpt4om': 'ذكاء-ميني', 'gpt3': 'ذكاء3', 'o1': 'ذكاء-متقدم',
+            'gemini': 'جيميني', 'gemini-analyze': 'تحليل-صور', 'deepseek': 'بحث-عميق',
+            'imagine': 'تخيل', 'aiart': 'رسم', 'genai': 'توليد-صور', 'nanobanana': 'نانو', 'banana-ai': 'موز',
+            'ghibli': 'جيبلي', 'ghibli-art': 'فن-جيبلي', 'faceswap': 'تبديل-وجه',
+            'ai-enhance': 'تحسين', 'colorize': 'تلوين', 'remini': 'ريميني', 'unblur': 'توضيح',
+            'vocalremover': 'عزل-صوت', 'musicgen': 'توليد-موسيقى', 'removebg': 'حذف-خلفية',
+            'qwen': 'كوين', 'miramuse': 'ميرا', 'edit': 'تعديل',
+            'quran': 'قرآن', 'salat': 'صلاة', 'prayertimes': 'مواقيت', 'adhan': 'أذان',
+            'hadith': 'حديث', 'ad3iya': 'أدعية', 'azkar': 'أذكار', 'qibla': 'قبلة',
+            'tafsir': 'تفسير', 'surah': 'سورة', 'ayah': 'آية', 'dua': 'دعاء',
+            'asmaa': 'أسماء-الله', 'fadlsalat': 'فضل-صلاة', 'hukm': 'حكم', 'qiyam': 'قيام',
+            'danb': 'ذنب', 'nasiha': 'نصيحة', 'tadabbur': 'تدبر', 'sahaba': 'صحابة',
+            'faida': 'فائدة', 'hasanat': 'حسنات', 'jumaa': 'جمعة', 'hajj': 'حج',
+            'sira': 'سيرة', 'mawt': 'موت', 'shirk': 'شرك', 'hub': 'حب', 'deen': 'دين',
+            'facebook': 'فيسبوك', 'instagram': 'انستا', 'youtube': 'يوتيوب', 'tiktok': 'تيكتوك',
+            'mediafire': 'ميديافاير', 'play': 'شغل', 'song': 'أغنية', 'video': 'فيديو',
+            'yts': 'بحث-يوتيوب', 'ytplay': 'تشغيل', 'apk': 'تطبيق', 'apk2': 'تطبيق2', 'apk3': 'تطبيق3',
+            'github': 'جيتهاب',
+            'sticker': 'ستيكر', 'translate': 'ترجمة', 'weather': 'طقس', 'calc': 'حساب',
+            'pdf2img': 'صور-بي-دي-اف', 'ocr': 'استخراج-نص', 'tts': 'نطق', 'qrcode': 'كود-كيو-آر',
+            'screenshot': 'سكرين', 'ss': 'لقطة', 'tomp3': 'صوت', 'toimage': 'صورة',
+            'tovideo': 'فيديو', 'togif': 'جيف', 'attp': 'نص-متحرك', 'ttp': 'نص-ملون',
+            'lyrics': 'كلمات', 'upload': 'رفع', 'readviewonce': 'قراءة-مرة', 'stt': 'كتابة-أوديو',
+            'img-blur': 'طمس', 'say': 'قول', 'sticker-alt': 'ستيكر2',
+            'kick': 'طرد', 'promote': 'ترقية', 'demote': 'تخفيض', 'ban': 'حظر',
+            'tagall': 'منشن', 'hidetag': 'اخفاء', 'mute': 'كتم', 'unmute': 'الغاء-كتم',
+            'close': 'اغلاق', 'open': 'فتح', 'antilink': 'منع-روابط', 'warn': 'تحذير',
+            'antibadword': 'منع-شتائم', 'welcome': 'ترحيب', 'goodbye': 'وداع',
+            'groupinfo': 'معلومات-مجموعة', 'staff': 'طاقم', 'delete': 'حذف',
+            'warnings': 'تحذيرات',
+            'joke': 'نكتة', 'fact': 'حقيقة', 'quote': 'اقتباس', 'meme': 'ميم',
+            'truth': 'صراحة', 'dare': 'تحدي', 'ship': 'توافق', 'ngl': 'صراحة-مجهولة',
+            '4kwallpaper': 'خلفيات', 'character': 'شخصية', 'goodnight': 'نعاس',
+            'stupid': 'مكلخ', 'flirt': 'غزل', 'compliment': 'مدح', 'insult': 'سب',
+            'menugame': 'قائمة-ألعاب', 'xo': 'اكس-او', 'tictactoe': 'اكس-او',
+            'rps': 'حجر-ورقة', 'math': 'رياضيات', 'guess': 'تخمين', 'scramble': 'خلط-كلمات',
+            'riddle': 'لغز', 'quiz': 'مسابقة', 'love': 'حب', 'hangman': 'مشنقة',
+            'trivia': 'ثقافة', 'eightball': 'كرة-سحرية', 'guesswho': 'شكون-انا',
+            'profile': 'بروفايل', 'daily': 'يومي', 'top': 'ترتيب', 'shop': 'متجر',
+            'gamble': 'قمار', 'slots': 'ماكينة', 'blackjack': 'بلاك-جاك',
+            'ping': 'بينغ', 'owner': 'المالك', 'help': 'مساعدة', 'alive': 'حي',
+            'system': 'نظام', 'setlang': 'لغة', 'script': 'سكريبت', 'allmenu': 'كل-الأوامر',
+            'mode': 'وضع', 'devmsg': 'بث', 'pmblocker': 'حظر-خاص', 'anticall': 'منع-مكالمات',
+            'backup': 'نسخة-احتياطية', 'unban': 'الغاء-حظر', 'block': 'بلوك', 'unblock': 'فك-بلوك',
+            'cleartmp': 'مسح-مؤقت', 'sudo': 'مشرف', 'clear': 'مسح', 'clearsession': 'مسح-جلسة',
+            'autoreminder': 'تذكير-تلقائي', 'admin': 'أدمن', 'addsudo': 'إضافة-مشرف', 'delsudo': 'حذف-مشرف', 'listadmin': 'قائمة-المشرفين', 'schedule': 'توقيت-المجموعة', 'autogroup': 'أوتو-قروب'
         };
 
-        // 3. Runtime Stats & Thumbnail
-        const runtime = process.uptime();
-        const days = Math.floor(runtime / 86400);
-        const hours = Math.floor((runtime % 86400) / 3600);
-        const minutes = Math.floor((runtime % 3600) / 60);
-
-        let thumbBuffer = null;
-        try {
-            // Try to resolve the path relative to the root or absolute
-            let thumbPath = settings.botThumbnail;
-            if (!path.isAbsolute(thumbPath)) {
-                thumbPath = path.join(__dirname, '..', thumbPath);
-            }
-            if (fs.existsSync(thumbPath)) {
-                thumbBuffer = fs.readFileSync(thumbPath);
-            }
-        } catch (e) { console.error('Error reading thumbnail:', e); }
-
-        // Pretty Date Time
-        const date = new Date();
-        const timeString = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-        const dateString = date.toLocaleDateString('en-GB');
-
-        const header =
-            `┏━━━ ❰ *${t('common.botName', {}, userLang).toUpperCase()}* ❱ ━━━┓\n` +
-            `┃ 🤵‍♂️ *Owner:* ${t('common.botOwner', {}, userLang)}\n` +
-            `┃ 📆 *Date:* ${dateString}\n` +
-            `┃ ⌚ *Time:* ${timeString}\n` +
-            `┃ ⏳ *Uptime:* ${days}d ${hours}h ${minutes}m\n` +
-            `┃ 🤖 *Ver:* ${settings.version || '2.0.0'}\n` +
-            `┗━━━━━━━━━━━━━━━━━━┛\n\n`;
-
-        // ROOT FIX: Premium Text + Image Menu (100% Reliability)
-        // ROOT FIX: Premium Text + Image Menu (100% Reliability)
-        const sendMenu = async (text, headerTitle = "Hamza Amirni Bot") => {
-            const footerBranding = `\n\n🛡️ *${t('common.botName', {}, userLang)}* 🛡️\n📢 *قناتنا:* ${settings.officialChannel}`;
-            const fullText = text + footerBranding;
-
-            if (thumbBuffer) {
-                // Send standard Image Message (Most Reliable)
-                // REMOVE externalAdReply from image message to prevent conflicts
-                await sock.sendMessage(chatId, {
-                    image: thumbBuffer,
-                    caption: fullText,
-                    contextInfo: {
-                        mentionedJid: [chatId],
-                        isForwarded: true,
-                        forwardingScore: 999
-                    }
-                }, { quoted: msg });
-            } else {
-                // Text Fallback with Link Preview
-                await sock.sendMessage(chatId, {
-                    text: fullText,
-                    contextInfo: {
-                        mentionedJid: [chatId],
-                        isForwarded: true,
-                        forwardingScore: 999,
-                        externalAdReply: {
-                            title: headerTitle,
-                            body: "المطور: حمزة اعمرني",
-                            thumbnail: thumbBuffer,
-                            sourceUrl: settings.officialChannel,
-                            mediaType: 1,
-                            renderLargerThumbnail: true,
-                            showAdAttribution: true
-                        }
-                    }
-                }, { quoted: msg });
-            }
+        const catIcons = {
+            'new': '🔥', 'religion': '🕌', 'download': '📥', 'ai': '🤖', 'group': '👥', 'tools': '🛠️',
+            'news': '📡', 'daily': '💰', 'fun': '🎭', 'games': '🎮', 'general': '✨', 'owner': '👑'
         };
 
-        // --- PRIORITY 1: Sub-Menu/Category Aliases ---
-        if (requested) {
-            // Global Redirect for .menu all
-            if (allAliases.includes(requested)) {
-                const allmenu = require('./allmenu');
-                return await allmenu(sock, chatId, msg, args, commands, userLang);
-            }
+        const catImages = {
+            'new': 'https://telegra.ph/file/0b741753715ec35165842.jpg',
+            'religion': 'https://telegra.ph/file/3fb62828b4931a7833a9c.jpg',
+            'download': 'https://telegra.ph/file/332ce38515c0e0c9048c1.jpg',
+            'ai': 'https://telegra.ph/file/f05474661845187e5b22b.jpg',
+            'group': 'https://telegra.ph/file/153a55781a70425a1e2f3.jpg',
+            'tools': 'https://telegra.ph/file/b77f154316d9972353164.jpg',
+            'news': 'https://telegra.ph/file/204732152862a988d44c8.jpg',
+            'daily': 'https://telegra.ph/file/49c0d29759c8369680371.jpg',
+            'fun': 'https://telegra.ph/file/6c125df944ce55a90962b.jpg',
+            'games': 'https://telegra.ph/file/d89a7122105e49339e602.jpg',
+            'general': 'https://telegra.ph/file/1284dd3685e1975e523f4.jpg',
+            'owner': 'https://telegra.ph/file/3990867027d1421066341.jpg'
+        };
 
-            let selectedKey = null;
-            if (catMap[requested]) selectedKey = requested;
-            else if (funAliases.includes(requested)) selectedKey = 'fun';
-            else if (downloadAliases.includes(requested)) selectedKey = 'download';
-            else if (toolsAliases.includes(requested)) selectedKey = 'tools';
-            else if (ownerAliases.includes(requested)) selectedKey = 'owner';
-            else if (generalAliases.includes(requested)) selectedKey = 'general';
-            else if (aiAliases.includes(requested)) selectedKey = 'ai';
-            else if (islamicAliases.includes(requested)) selectedKey = 'religion';
-            else if (gameAliases.includes(requested)) selectedKey = 'games';
+        const sections = ['new', 'religion', 'ai', 'download', 'tools', 'fun', 'games', 'group', 'news', 'daily', 'general', 'owner'];
 
-            if (selectedKey) {
-                const catName = t(`menu.categories.${selectedKey}`, {}, userLang);
-                let menuText = header + `\n✨ *أوامر قسم: ${catName.toUpperCase()}* ✨\n` + `─━━━━━━━━━━━━━━─\n\n`;
-
-                catMap[selectedKey].forEach(c => {
-                    const icon = cmdIcons[c] || '🔹';
-                    const desc = t(`command_desc.${c}`, {}, userLang);
-                    const descText = desc.startsWith('command_desc.') ? '' : `\n   └ _${desc}_`;
-                    menuText += `${icon} *${prefix}${c}*${descText}\n\n`;
-                });
-
-                menuText += `─━━━━━━━━━━━━━━─\n` + `🔙 اكتب *.menu* للرجوع للقائمة الرئيسية.`;
-                return await sendMenu(menuText, `أوامر ${catName}`);
-            }
-
-            // Command Help Info
-            if (commands.has(requested)) {
-                const desc = t(`command_desc.${requested}`, {}, userLang);
-                return await sendMenu(
-                    `💡 *معلومات عن الأمر:* \`${prefix}${requested}\`\n\n` +
-                    `📝 *الشرح:* ${desc.startsWith('command_desc.') ? 'لا يوجد وصف حالياً' : desc}\n\n` +
-                    `👤 *المطور:* حمزة اعمرني`
-                );
-            }
+        async function createHeaderImage(url) {
+            const { imageMessage } = await generateWAMessageContent({ image: { url } }, { upload: sock.waUploadToServer });
+            return imageMessage;
         }
 
-        // --- PRIORITY 2: Main Menu Display ---
-        let mainMenu = header +
-            `🏰 *مرحباً بك في إمبراطورية الأوامر* 🏰\n` +
-            `بوت شامل ومتطور لخدمتك. تفضل باختيار القسم:\n\n` +
-            `🚀 *${prefix}menu new* : الجديد (Hot)\n` +
-            `🕌 *${prefix}menu deen* : الركن الإسلامي\n` +
-            `🤖 *${prefix}menu ai* : الذكاء الاصطناعي\n` +
-            `📥 *${prefix}menu download* : التحميلات\n` +
-            `🛠️ *${prefix}menu tools* : الأدوات والخدمات\n` +
-            `🤣 *${prefix}menu fun* : الترفيه والضحك\n` +
-            `🎮 *${prefix}menu games* : قسم الألعاب\n` +
-            `👥 *${prefix}menu group* : إدارة المجموعات\n` +
-            `📰 *${prefix}menu news* : الأخبار والرياضة\n` +
-            `💰 *${prefix}menu economy* : الاقتصاد (البنك)\n` +
-            `⚙️ *${prefix}menu general* : نظام البوت\n` +
-            `👑 *${prefix}menu owner* : قسم المطور\n` +
-            `🌟 *${prefix}allmenu* : جميع الأوامر\n\n` +
-            `💡 *نصيحة:* اكتب .menu متبوعاً باسم القسم (مثال: .menu ai)`;
+        let cards = [];
+        for (let section of sections) {
+            const title = t(`menu.categories.${section}`, {}, userLang);
+            const cmds = catMap[section];
+            const icon = catIcons[section] || '🔹';
+            const imageUrl = catImages[section] || 'https://telegra.ph/file/0b741753715ec35165842.jpg';
 
-        await sendMenu(mainMenu, "Hamza Amirni Bot Menu");
+            let bodyText = `✨ *${icon} قسم ${title}* ✨\n\n`;
+            cmds.forEach(cmd => {
+                const displayName = (isArabic && arCmds[cmd]) ? arCmds[cmd] : cmd;
+                bodyText += `▫️ ${prefix}${displayName}\n`;
+            });
+
+            cards.push({
+                body: proto.Message.InteractiveMessage.Body.fromObject({ text: bodyText }),
+                footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${botName} 🧠` }),
+                header: proto.Message.InteractiveMessage.Header.fromObject({
+                    title: `قائمة ${title}`,
+                    hasMediaAttachment: true,
+                    imageMessage: await createHeaderImage(imageUrl)
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                    buttons: [
+                        {
+                            "name": "cta_url",
+                            "buttonParamsJson": `{"display_text":"قناتي الرسمية","url":"${settings.officialChannel}"}`
+                        }
+                    ]
+                })
+            });
+        }
+
+        const helpMsg = generateWAMessageFromContent(chatId, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        body: proto.Message.InteractiveMessage.Body.create({ text: `👋 مرحبًا بك في قائمة مساعدة ${botName}\n\nاسحب البطاقات لعرض جميع المميزات...` }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${botName} 2026` }),
+                        header: proto.Message.InteractiveMessage.Header.create({ hasMediaAttachment: false }),
+                        carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
+                    })
+                }
+            }
+        }, { quoted: msg });
+
+        await sock.relayMessage(chatId, helpMsg.message, { messageId: helpMsg.key.id });
 
     } catch (error) {
         console.error('Error in help command:', error);
-        await sock.sendMessage(chatId, { text: t('common.error') }, { quoted: msg });
+        await sock.sendMessage(chatId, { text: t('common.error', {}, userLang) });
     }
 };
+
