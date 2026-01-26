@@ -179,8 +179,8 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                             "buttonParamsJson": JSON.stringify({ display_text: "فيسبوك 📘", url: settings.facebookPage })
                         },
                         {
-                            "name": "cta_url",
-                            "buttonParamsJson": JSON.stringify({ display_text: "المطور 👑", url: `https://wa.me/${settings.ownerNumber[0]}` })
+                            "name": "quick_reply",
+                            "buttonParamsJson": JSON.stringify({ display_text: "المطور 👑", id: ".owner" })
                         }
                     ]
                 })
