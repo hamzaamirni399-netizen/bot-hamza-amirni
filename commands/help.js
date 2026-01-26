@@ -194,6 +194,10 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                                   `⏰ *${L_TIME}:* ${time}\n` +
                                   `📅 *Date:* ${date}\n` +
                                   `⏳ *${L_UPTIME}:* ${uptime}\n\n` +
+                                  `🔗 *Follow Me:*\n` +
+                                  `📸 *Insta:* ${settings.instagram}\n` +
+                                  `📘 *FB:* ${settings.facebookPage}\n` +
+                                  `👤 *Owner:* wa.me/${settings.ownerNumber[0]}\n\n` +
                                   `*${L_SWIPE}*`
                         }),
                         footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${botName} 2026` }),
