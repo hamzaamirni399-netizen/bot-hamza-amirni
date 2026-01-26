@@ -56,9 +56,9 @@ async function getOkatsuDownloadByUrl(youtubeUrl) {
 
 const { t } = require('../lib/language');
 
-async function songCommand(sock, chatId, message, args, commands, userLang) {
+async function songCommand(sock, chatId, message, args, commands, userLang, match) {
     try {
-        const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
+        const text = match || args.join(' ') || (message.message?.extendedTextMessage?.text || message.message?.conversation || '').replace(/^\/?.+?\s/, '').trim();
         if (!text) {
             await sock.sendMessage(chatId, { text: t('play.usage', {}, userLang) }, { quoted: message });
             return;

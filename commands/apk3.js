@@ -35,18 +35,21 @@ async function apk3Command(sock, chatId, msg, args, commands, userLang) {
         let cards = [];
         for (let app of results.slice(0, 8)) {
             const imageMessage = await createHeaderImage(app.icon || 'https://ui-avatars.com/api/?name=APK&background=random&size=512');
+            const pkg = app.package || app.id || 'N/A';
+            const size = app.sizeMB || (app.size ? (app.size / (1024 * 1024)).toFixed(2) : 'N/A');
+
             cards.push({
                 body: proto.Message.InteractiveMessage.Body.fromObject({
-                    text: `🎮 *App:* ${app.name}\n📏 *Size:* ${app.sizeMB} MB\n🆔 *Pkg:* ${app.package}`
+                    text: `🎮 *App:* ${app.name}\n📏 *Size:* ${size} MB\n🆔 *Pkg:* ${pkg}`
                 }),
                 footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${settings.botName} 🧠` }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
-                    title: app.name,
+                    title: app.author || app.name,
                     hasMediaAttachment: true,
                     imageMessage
                 }),
                 nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                    buttons: [{ "name": "quick_reply", "buttonParamsJson": `{"display_text":"${L_DOWNLOAD}","id":".apk ${app.package}"}` }]
+                    buttons: [{ "name": "quick_reply", "buttonParamsJson": `{"display_text":"${L_DOWNLOAD}","id":".apk ${pkg}"}` }]
                 })
             });
         }

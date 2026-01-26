@@ -160,7 +160,7 @@ async function getOkatsuVideoByUrl(youtubeUrl) {
 
 async function videoCommand(sock, chatId, msg, args, commands, userLang, match) {
     try {
-        const searchQuery = match || args.join(' ') || '';
+        const searchQuery = match || args.join(' ') || (msg.message?.extendedTextMessage?.text || msg.message?.conversation || '').replace(/^\/?.+?\s/, '').trim();
 
         if (!searchQuery) {
             await sock.sendMessage(chatId, { text: t('video.usage', {}, userLang) }, { quoted: msg });
