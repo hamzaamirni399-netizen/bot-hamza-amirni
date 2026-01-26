@@ -35,6 +35,7 @@ async function blockCommand(sock, chatId, msg, args) {
         }
 
         // Block the user
+        // Block the user
         await sock.updateBlockStatus(targetJid, 'block');
 
         const blockedNumber = targetJid.replace('@s.whatsapp.net', '');
