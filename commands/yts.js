@@ -41,7 +41,7 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
         let cards = [];
         for (let v of videos) {
             const imageMessage = await createHeaderImage(v.thumbnail);
-            
+
             cards.push({
                 body: proto.Message.InteractiveMessage.Body.fromObject({
                     text: `🎬 *${v.title}*\n⏱️ *Duration:* ${v.timestamp}\n👀 *Views:* ${v.views}\n📅 *Uploaded:* ${v.ago}`
@@ -62,7 +62,7 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                         },
                         {
                             "name": "quick_reply",
-                            "buttonParamsJson": JSON.stringify({ display_text: L_AUDIO, id: `.song ${v.url}` })
+                            "buttonParamsJson": JSON.stringify({ display_text: L_AUDIO, id: `.play ${v.url}` })
                         }
                     ]
                 })
