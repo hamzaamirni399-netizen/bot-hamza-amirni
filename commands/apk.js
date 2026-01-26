@@ -21,39 +21,38 @@ async function apkCommand(sock, chatId, msg, args, commands, userLang) {
 
     // --- DOWNLOAD MODE (Triggered by Button or Direct Package Name) ---
     // If query looks like a package name (no spaces)
-    if (query.match(/^[a-zA-Z0-9.]+$/) && !query.includes(' ')) {
+    if (query.match(/^[a-zA-Z0-9.]+$/) && !query.includes(' ') && query.includes('.')) {
         try {
             await sock.sendMessage(chatId, { react: { text: "⏳", key: msg.key } });
             
-            // Search using search(query, 1) and take the first result
-            const results = await aptoide.search(query, 1);
-            const app = results[0];
+            // Use downloadInfo which is better for direct package identification
+            const app = await aptoide.downloadInfo(query);
             
             if (!app || !app.downloadUrl) {
-                // If it was a search query and not a pkg name, falling back to search mode
-                if (!query.includes('.')) throw new Error('Not a package');
-                return await sock.sendMessage(chatId, { text: `❌ App not found or download unavailable.` });
+                 console.log(`[APK] Direct lookup failed for: ${query}`);
+                 throw new Error('Direct download failed'); // Trigger fallback to search
             }
 
             const sizeMB = parseFloat(app.sizeMB || 0);
-            if (sizeMB > 300) {
-                 return await sock.sendMessage(chatId, { text: `⚠️ App too large (${sizeMB} MB). Limit: 300MB.` }, { quoted: msg });
+            if (sizeMB > 350) {
+                 return await sock.sendMessage(chatId, { text: `⚠️ App too large (${sizeMB} MB). Limit: 350MB.` }, { quoted: msg });
             }
 
             const L_SENDING = t('common.wait', {}, userLang) || '⏳ Sending file...';
+            // Use a simple text instead of relayMessage to avoid delays
             await sock.sendMessage(chatId, { text: L_SENDING }, { quoted: msg });
 
             const caption = t('apk.caption', {
                 name: app.name,
-                package: app.package || 'N/A',
-                updated: app.updated || 'N/A',
-                size: app.sizeMB,
+                package: app.package || query,
+                updated: app.updated || 'Latest',
+                size: app.sizeMB || 'N/A',
                 botName: settings.botName
             }, userLang);
 
             await sock.sendMessage(chatId, {
                 document: { url: app.downloadUrl },
-                fileName: `${app.name}.apk`,
+                fileName: `${app.name || 'App'}.apk`,
                 mimetype: 'application/vnd.android.package-archive',
                 caption: caption
             }, { quoted: msg });
@@ -62,7 +61,8 @@ async function apkCommand(sock, chatId, msg, args, commands, userLang) {
             await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
             return;
         } catch (e) {
-            // Fallback to search if it wasn't a valid pkg or direct download failed
+            console.error('[APK] Download Mode failed:', e.message);
+            // Fallback to Search Mode below
         }
     }
 
@@ -107,7 +107,7 @@ async function apkCommand(sock, chatId, msg, args, commands, userLang) {
                     imageMessage
                 }),
                 nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                    buttons: [{ "name": "quick_reply", "buttonParamsJson": `{"display_text":"${L_DOWNLOAD}","id":".apk ${pkg}"}` }]
+                    buttons: [{ "name": "quick_reply", "buttonParamsJson": JSON.stringify({ display_text: L_DOWNLOAD, id: `.apk ${pkg}` }) }]
                 })
             });
         }

@@ -58,11 +58,11 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                     buttons: [
                         {
                             "name": "quick_reply",
-                            "buttonParamsJson": `{"display_text":"${L_VIDEO}","id":".video ${v.url}"}`
+                            "buttonParamsJson": JSON.stringify({ display_text: L_VIDEO, id: `.video ${v.url}` })
                         },
                         {
                             "name": "quick_reply",
-                            "buttonParamsJson": `{"display_text":"${L_AUDIO}","id":".song ${v.url}"}`
+                            "buttonParamsJson": JSON.stringify({ display_text: L_AUDIO, id: `.song ${v.url}` })
                         }
                     ]
                 })

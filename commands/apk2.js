@@ -57,7 +57,7 @@ async function apk2Command(sock, chatId, msg, args, commands, userLang) {
                     imageMessage
                 }),
                 nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                    buttons: [{ "name": "quick_reply", "buttonParamsJson": `{"display_text":"${L_DOWNLOAD}","id":".apk ${pkg}"}` }]
+                    buttons: [{ "name": "quick_reply", "buttonParamsJson": JSON.stringify({ display_text: L_DOWNLOAD, id: `.apk ${pkg}` }) }]
                 })
             });
         }
