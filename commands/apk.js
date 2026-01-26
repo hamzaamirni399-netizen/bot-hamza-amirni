@@ -23,24 +23,27 @@ async function apkCommand(sock, chatId, msg, args, commands, userLang) {
     // If query looks like a package name (no spaces)
     if (query && !query.includes(' ') && (query.includes('.') || query.match(/^[a-z0-9_]+(\.[a-z0-9_]+)+$/i) || args.length === 1)) {
         try {
-            console.log(`[APK] 📥 Attempting Download Mode for: ${query}`);
+            console.log(`[APK] 📥 ENTERING DOWNLOAD MODE | Query: "${query}" | Args Length: ${args.length}`);
             await sock.sendMessage(chatId, { react: { text: "⏳", key: msg.key } });
             
-            // Use downloadInfo which is better for direct package identification
+            console.log(`[APK] 🔍 Fetching info for: ${query}...`);
             const app = await aptoide.downloadInfo(query);
             
             if (!app || !app.downloadUrl) {
-                 console.log(`[APK] Direct lookup failed for: ${query}`);
+                 console.log(`[APK] ❌ Direct resolution failed (No data or No URL) for: ${query}`);
                  throw new Error('Direct download failed'); // Trigger fallback to search
             }
 
+            console.log(`[APK] ✅ Resolved: ${app.name} (${app.sizeMB} MB)`);
+
             const sizeMB = parseFloat(app.sizeMB || 0);
             if (sizeMB > 350) {
+                 console.log(`[APK] ⚠️ File too large: ${sizeMB} MB`);
                  return await sock.sendMessage(chatId, { text: `⚠️ App too large (${sizeMB} MB). Limit: 350MB.` }, { quoted: msg });
             }
 
             const L_SENDING = t('common.wait', {}, userLang) || '⏳ Sending file...';
-            // Use a simple text instead of relayMessage to avoid delays
+            console.log(`[APK] 📤 Sending document to ${chatId}...`);
             await sock.sendMessage(chatId, { text: L_SENDING }, { quoted: msg });
 
             const caption = t('apk.caption', {
@@ -58,11 +61,12 @@ async function apkCommand(sock, chatId, msg, args, commands, userLang) {
                 caption: caption
             }, { quoted: msg });
 
+            console.log(`[APK] ✨ Successfully sent: ${app.name}`);
             incrementDownload(senderId);
             await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
             return;
         } catch (e) {
-            console.error('[APK] Download Mode failed:', e.message);
+            console.error('[APK] ❌ Download Mode Error:', e.message);
             // Fallback to Search Mode below
         }
     }
