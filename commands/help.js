@@ -3,6 +3,20 @@ const { t } = require('../lib/language');
 const { generateWAMessageContent, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
 const path = require('path');
 const fs = require('fs');
+const moment = require('moment-timezone');
+
+function runtime(seconds) {
+    seconds = Number(seconds);
+    var d = Math.floor(seconds / (3600 * 24));
+    var h = Math.floor(seconds % (3600 * 24) / 3600);
+    var m = Math.floor(seconds % 3600 / 60);
+    var s = Math.floor(seconds % 60);
+    var dDisplay = d > 0 ? d + (d == 1 ? " day, " : " days, ") : "";
+    var hDisplay = h > 0 ? h + (h == 1 ? " hour, " : " hours, ") : "";
+    var mDisplay = m > 0 ? m + (m == 1 ? " minute, " : " minutes, ") : "";
+    var sDisplay = s > 0 ? s + (s == 1 ? " second" : " seconds") : "";
+    return dDisplay + hDisplay + mDisplay + sDisplay;
+}
 
 module.exports = async (sock, chatId, msg, args, commands, userLang) => {
     try {
@@ -146,12 +160,25 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
             });
         }
 
+        const time = moment.tz(settings.timezone || 'Africa/Casablanca').format('HH:mm:ss');
+        const date = moment.tz(settings.timezone || 'Africa/Casablanca').format('DD/MM/YYYY');
+        const uptime = runtime(process.uptime());
+        const pushname = msg.pushName || 'User';
+
         const helpMsg = generateWAMessageFromContent(chatId, {
             viewOnceMessage: {
                 message: {
                     messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
-                        body: proto.Message.InteractiveMessage.Body.create({ text: `👋 مرحبًا بك في قائمة مساعدة ${botName}\n\nاسحب البطاقات لعرض جميع المميزات...` }),
+                        body: proto.Message.InteractiveMessage.Body.create({ 
+                            text: `👋 *Welcome, ${pushname}*\n\n` +
+                                  `🤖 *Bot Name:* ${botName}\n` +
+                                  `👑 *Developer:* حمزة اعمرني\n` +
+                                  `⏰ *Time:* ${time}\n` +
+                                  `📅 *Date:* ${date}\n` +
+                                  `⏳ *Uptime:* ${uptime}\n\n` +
+                                  `*Swipe the cards below to explore all commands...*`
+                        }),
                         footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${botName} 2026` }),
                         header: proto.Message.InteractiveMessage.Header.create({ hasMediaAttachment: false }),
                         carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
