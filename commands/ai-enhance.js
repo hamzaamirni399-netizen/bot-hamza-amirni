@@ -1,8 +1,5 @@
-const axios = require("axios");
+const axios = require('axios');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { sendWithChannelButton } = require('../lib/channelButton');
-const { t } = require('../lib/language');
-const settings = require('../settings');
 
 class PhotoEnhancer {
     constructor() {
@@ -19,22 +16,13 @@ class PhotoEnhancer {
                 "content-type": "application/json",
                 origin: "https://photoenhancer.pro",
                 referer: "https://photoenhancer.pro/",
-                "user-agent":
-                    "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/127 Mobile"
+                "user-agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127 Mobile"
             }
         };
     }
 
     wait(ms) {
         return new Promise(r => setTimeout(r, ms || 3000));
-    }
-
-    async img(input) {
-        if (!input) return null;
-        if (Buffer.isBuffer(input)) {
-            return `data:image/jpeg;base64,${input.toString("base64")}`;
-        }
-        return input;
     }
 
     async poll(id) {
@@ -53,19 +41,18 @@ class PhotoEnhancer {
         throw new Error("Processing timeout");
     }
 
-    async generate({ imageUrl, type }) {
-        const imageData = await this.img(imageUrl);
+    async generate({ imageBase64, type }) {
         let endpoint = this.cfg.end.enhance;
-        let body = { imageData, mode: "ultra", fileName: "image.png" };
+        let body = { imageData: imageBase64, mode: "ultra", fileName: "image.png" };
 
         if (type === "remove-bg") {
             endpoint = this.cfg.end.removeBg;
-            body = { imageData };
+            body = { imageData: imageBase64 };
         }
 
         if (type === "upscale") {
             endpoint = this.cfg.end.upscale;
-            body = { imageData, targetResolution: "4K" };
+            body = { imageData: imageBase64, targetResolution: "4K" };
         }
 
         const init = await axios.post(
@@ -83,60 +70,85 @@ class PhotoEnhancer {
     }
 }
 
-async function aiEnhanceCommand(sock, chatId, msg, args, commands, userLang) {
-    try {
-        let quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage ? {
-            message: msg.message.extendedTextMessage.contextInfo.quotedMessage,
+async function aiEnhanceCommand(sock, chatId, msg, args, commands, userLang, match) {
+    let targetMessage = msg;
+    if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
+        const quotedInfo = msg.message.extendedTextMessage.contextInfo;
+        targetMessage = {
             key: {
                 remoteJid: chatId,
-                id: msg.message.extendedTextMessage.contextInfo.stanzaId,
-                participant: msg.message.extendedTextMessage.contextInfo.participant
-            }
-        } : msg;
+                id: quotedInfo.stanzaId,
+                participant: quotedInfo.participant
+            },
+            message: quotedInfo.quotedMessage
+        };
+    }
 
-        const isImage = !!(quoted.message?.imageMessage || (quoted.message?.documentMessage && quoted.message.documentMessage.mimetype?.includes('image')));
-        const isViewOnce = !!(quoted.message?.viewOnceMessage?.message?.imageMessage || quoted.message?.viewOnceMessageV2?.message?.imageMessage);
+    const isImage = targetMessage.message?.imageMessage;
 
-        if (!isImage && !isViewOnce) {
-            return await sock.sendMessage(chatId, { text: t('ai_enhance.help', { prefix: settings.prefix }, userLang) }, { quoted: msg });
-        }
+    if (!isImage) {
+        const usageText = `❌ *AI Enhance - Usage Guide*
 
-        const text = args.join(' ').toLowerCase();
+You must reply to an image to use this feature.
+
+📌 *How to use:*
+1. Send or receive an image
+2. Reply to the image
+3. Type one of the commands below
+
+✨ *Available Commands*
+• .ai-enhance → Enhance image quality
+• .ai-enhance bg → Remove background
+• .ai-enhance upscale → Upscale image to 4K
+
+📝 *Example*
+Reply to an image and type:
+.ai-enhance
+
+⚠️ Notes:
+• Processing takes 5–15 seconds
+`;
+        return sock.sendMessage(chatId, { text: usageText }, { quoted: msg });
+    }
+
+    try {
+        const text = match.toLowerCase();
         let type = "enhance";
 
         if (text.includes("bg")) type = "remove-bg";
         if (text.includes("upscale")) type = "upscale";
 
-        await sock.sendMessage(chatId, { react: { text: "⏳", key: msg.key } });
-        await sock.sendMessage(chatId, { text: t('ai_enhance.wait', {}, userLang) }, { quoted: msg });
+        await sock.sendMessage(chatId, { text: "⏳ *AI is processing your image, please wait...*" }, { quoted: msg });
 
-        const buffer = await downloadMediaMessage(quoted, 'buffer', {}, {
+        const buffer = await downloadMediaMessage(targetMessage, 'buffer', {}, {
             logger: undefined,
             reuploadRequest: sock.updateMediaMessage
         });
 
-        if (!buffer) throw new Error("Failed to download image.");
+        if (!buffer) throw new Error("Failed to download image");
+
+        const imageBase64 = `data:image/jpeg;base64,${buffer.toString("base64")}`;
 
         const api = new PhotoEnhancer();
-
         const result = await api.generate({
-            imageUrl: buffer,
+            imageBase64,
             type
         });
 
         if (!result) throw new Error("Failed to process image.");
 
-        await sock.sendMessage(chatId, {
-            image: { url: result },
-            caption: t('ai_enhance.success', {}, userLang)
-        }, { quoted: msg });
-
-        await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
+        await sock.sendMessage(
+            chatId,
+            {
+                image: { url: result },
+                caption: "✅ *AI Enhance completed!*"
+            },
+            { quoted: msg }
+        );
 
     } catch (e) {
-        console.error('AI Enhance Error:', e);
-        await sock.sendMessage(chatId, { text: t('ai_enhance.error', {}, userLang) + `\n⚠️ ${e.message}` }, { quoted: msg });
-        await sock.sendMessage(chatId, { react: { text: "❌", key: msg.key } });
+        console.error('ai-enhance error:', e);
+        await sock.sendMessage(chatId, { text: "❌ Failed to process image. " + (e.message || "") }, { quoted: msg });
     }
 }
 

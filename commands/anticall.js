@@ -6,22 +6,40 @@ const ANTICALL_PATH = './data/anticall.json';
 function readState() {
     try {
         if (!fs.existsSync(ANTICALL_PATH)) {
-            // Default: enabled by default
-            writeState(true);
-            return { enabled: true };
+            // Default: enabled and action is 'block'
+            writeState(true, 'block');
+            return { enabled: true, action: 'block' };
         }
         const raw = fs.readFileSync(ANTICALL_PATH, 'utf8');
         const data = JSON.parse(raw || '{}');
-        return { enabled: !!data.enabled };
+        return {
+            enabled: !!data.enabled,
+            action: data.action || 'block' // Default to block if not set
+        };
     } catch {
-        return { enabled: true }; // Default to enabled on error
+        return { enabled: true, action: 'block' };
     }
 }
 
-function writeState(enabled) {
+function writeState(enabled, action) {
     try {
         if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
-        fs.writeFileSync(ANTICALL_PATH, JSON.stringify({ enabled: !!enabled }, null, 2));
+
+        // Preserve existing action if not provided
+        let currentAction = 'block';
+        try {
+            if (fs.existsSync(ANTICALL_PATH)) {
+                const current = JSON.parse(fs.readFileSync(ANTICALL_PATH, 'utf8'));
+                currentAction = current.action || 'block';
+            }
+        } catch { }
+
+        const finalAction = action || currentAction;
+
+        fs.writeFileSync(ANTICALL_PATH, JSON.stringify({
+            enabled: !!enabled,
+            action: finalAction
+        }, null, 2));
     } catch { }
 }
 
@@ -33,22 +51,23 @@ async function anticallCommand(sock, chatId, msg, args) {
         return await sendOwnerOnlyMessage(sock, chatId, msg);
     }
 
-    const state = readState();
+    const currentState = readState();
     // args is an array if coming from handler.js
     const subText = Array.isArray(args) ? args[0] : args;
     const sub = (subText || '').trim().toLowerCase();
 
-    if (!sub || (sub !== 'on' && sub !== 'off' && sub !== 'status')) {
+    if (!sub || (sub !== 'on' && sub !== 'off' && sub !== 'status' && sub !== 'block' && sub !== 'reject')) {
         await sendWithChannelButton(sock, chatId, `📵 *نظام منع المكالمات - ANTICALL*
         
-الحالة الافتراضية: *مفعّل دائماً* ✅
+الحالة الحالية: ${currentState.enabled ? '✅ مفعّل' : '⚠️ معطّل'}
+الإجراء: ${currentState.action === 'block' ? '🚫 حظر (Block)' : '📞 رفض فقط (Reject)'}
 
 الأوامر:
-• .anticall on  - تفعيل حظر المكالمات
-• .anticall off - إيقاف الحظر مؤقتاً
-• .anticall status - عرض الحالة الحالية
-
-ملاحظة: النظام مفعل تلقائياً لحماية البوت
+• .anticall on     - تفعيل النظام
+• .anticall off    - إيقاف النظام
+• .anticall block  - تفعيل الحظر (بلوك) للمتصل
+• .anticall reject - تفعيل الرفض فقط (بدون بلوك)
+• .anticall status - عرض الحالة
 
 ⚔️ bot hamza amirni` , msg);
         return;
@@ -57,22 +76,35 @@ async function anticallCommand(sock, chatId, msg, args) {
     if (sub === 'status') {
         const statusMsg = `📵 *حالة نظام منع المكالمات*
 
-الحالة الحالية: ${state.enabled ? '✅ *مفعّل*' : '⚠️ *معطّل*'}
+الحالة: ${currentState.enabled ? '✅ *مفعّل*' : '⚠️ *معطّل*'}
+الإجراء: ${currentState.action === 'block' ? '🚫 *حظر تلقائي* (Block)' : '📞 *رفض المكالمة فقط*'}
 
-${state.enabled ? '🛡️ البوت محمي من المكالمات المزعجة' : '⚠️ تحذير: البوت غير محمي من المكالمات'}
+${currentState.enabled ? '🛡️ البوت يحمي نفسه من الإزعاج.' : '⚠️ النظام متوقف.'}
 
 ⚔️ bot hamza amirni`;
         await sendWithChannelButton(sock, chatId, statusMsg, msg);
         return;
     }
 
+    if (sub === 'block') {
+        writeState(true, 'block');
+        return await sendWithChannelButton(sock, chatId, `✅ *تم تفعيل الحظر التلقائي!*\n\nأي شخص سيتصل بالبوت سيتم:\n1. رفض المكالمة 📞\n2. حظره فوراً 🚫`, msg);
+    }
+
+    if (sub === 'reject') {
+        writeState(true, 'reject');
+        return await sendWithChannelButton(sock, chatId, `✅ *تم تفعيل وضع الرفض فقط!*\n\nسيتم رفض المكالمات دون حظر المستخدم.`, msg);
+    }
+
     const enable = sub === 'on';
-    writeState(enable);
+    writeState(enable, currentState.action); // Keep existing action
+
     const responseMsg = `📵 *نظام منع المكالمات*
 
 ${enable ? '✅ تم التفعيل بنجاح!' : '⚠️ تم الإيقاف مؤقتاً'}
 
 الحالة: ${enable ? '*مفعّل* 🛡️' : '*معطّل* ⚠️'}
+الإجراء الحالي: ${currentState.action === 'block' ? 'حظر (Block)' : 'رفض (Reject)'}
 
 ⚔️ bot hamza amirni`;
     await sendWithChannelButton(sock, chatId, responseMsg, msg);

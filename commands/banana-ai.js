@@ -1,91 +1,139 @@
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const axios = require('axios');
-const crypto = require('crypto');
-const { sendWithChannelButton } = require('../lib/channelButton');
-const settings = require('../settings');
-const { translateToEn } = require('../lib/translate');
-const { t } = require('../lib/language');
+const CryptoJS = require('crypto-js');
+const fs = require('fs');
+const path = require('path');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 
-// AES configuration for Banana AI
 const AES_KEY = 'ai-enhancer-web__aes-key';
 const AES_IV = 'aienhancer-aesiv';
 
+// Encrypt settings payload
 function encryptSettings(obj) {
-    const key = Buffer.from(AES_KEY, 'utf8');
-    const iv = Buffer.from(AES_IV, 'utf8');
-    const cipher = crypto.createCipheriv('aes-192-cbc', key, iv);
-    let encrypted = cipher.update(JSON.stringify(obj), 'utf8', 'base64');
-    encrypted += cipher.final('base64');
-    return encrypted;
+    return CryptoJS.AES.encrypt(
+        JSON.stringify(obj),
+        CryptoJS.enc.Utf8.parse(AES_KEY),
+        {
+            iv: CryptoJS.enc.Utf8.parse(AES_IV),
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+        }
+    ).toString();
 }
 
-// Banana AI Replacement (using robust Img2Img API)
+// Core AI Enhancer function
 async function bananaAI(imageBuffer, prompt) {
-    try {
-        // 1. Upload Buffer to get URL (since most APIs need URL)
-        const { uploadImage } = require('../lib/uploadImage');
-        const imageUrl = await uploadImage(imageBuffer);
+    const imgBase64 = imageBuffer.toString('base64');
 
-        // 2. Use Ryzendesu API (Flux or Img2Img)
-        const apiUrl = `https://api.ryzendesu.vip/api/ai/img2img?url=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}`;
+    const settings = encryptSettings({
+        prompt,
+        aspect_ratio: 'match_input_image',
+        output_format: 'png',
+        max_images: 1,
+        sequential_image_generation: 'disabled'
+    });
 
-        const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+    const create = await axios.post(
+        'https://aienhancer.ai/api/v1/r/image-enhance/create',
+        {
+            model: 2,
+            image: `data:image/jpeg;base64,${imgBase64}`,
+            settings
+        },
+        {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10)',
+                'Content-Type': 'application/json',
+                Origin: 'https://aienhancer.ai',
+                Referer: 'https://aienhancer.ai/ai-image-editor'
+            }
+        }
+    );
 
-        const contentType = response.headers['content-type'];
-        if (contentType && contentType.includes('application/json')) {
-            const json = JSON.parse(response.data.toString());
-            if (json.error) throw new Error(json.error);
+    if (!create.data?.data?.id) {
+        throw new Error(create.data?.message || "Failed to create task");
+    }
+
+    const taskId = create.data.data.id;
+
+    // Poll result
+    for (let i = 0; i < 30; i++) {
+        const result = await axios.post(
+            'https://aienhancer.ai/api/v1/r/image-enhance/result',
+            { task_id: taskId },
+            {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10)',
+                    'Content-Type': 'application/json',
+                    Origin: 'https://aienhancer.ai',
+                    Referer: 'https://aienhancer.ai/ai-image-editor'
+                }
+            }
+        );
+
+        if (result.data.data.status === 'succeeded') {
+            return result.data.data.output;
         }
 
-        return response.data; // Returns Buffer
-    } catch (error) {
-        throw new Error('فشل السيرفر في معالجة الصورة.');
+        if (result.data.data.status === 'failed') {
+            throw new Error("Processing failed on server");
+        }
+
+        await new Promise(res => setTimeout(res, 3000));
     }
+    throw new Error("Processing timeout");
 }
 
-async function bananaAiCommand(sock, chatId, msg, args, commands, userLang) {
-    let quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage ? {
-        message: msg.message.extendedTextMessage.contextInfo.quotedMessage,
-        key: {
-            remoteJid: chatId,
-            id: msg.message.extendedTextMessage.contextInfo.stanzaId,
-            participant: msg.message.extendedTextMessage.contextInfo.participant
-        }
-    } : msg;
+async function bananaAiCommand(sock, chatId, msg, args, commands, userLang, match) {
+    let targetMessage = msg;
+    if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
+        const quotedInfo = msg.message.extendedTextMessage.contextInfo;
+        targetMessage = {
+            key: {
+                remoteJid: chatId,
+                id: quotedInfo.stanzaId,
+                participant: quotedInfo.participant
+            },
+            message: quotedInfo.quotedMessage
+        };
+    }
 
-    const isImage = !!(quoted.message?.imageMessage || (quoted.message?.documentMessage && quoted.message.documentMessage.mimetype?.includes('image')));
-    const prompt = args.join(' ').trim();
+    const isImage = targetMessage.message?.imageMessage;
 
     if (!isImage) {
-        const helpMsg = `🍌 *Banana AI - محرر الصور المتقدم* 🍌\r\n\r\n🔹 *الاستخدام:*\r\nقم بالرد على صورة مع كتابة الوصف.\r\n• مثال: .banana make it a cartoon\r\n\r\n⚔️ ${settings.botName}`;
-        return await sendWithChannelButton(sock, chatId, helpMsg, msg, {}, userLang);
+        return sock.sendMessage(chatId, {
+            text: '❌ You must reply to an image.\n\nExample:\nReply to image → .banana-ai improve image quality'
+        }, { quoted: msg });
     }
 
-    if (!prompt) {
-        return await sock.sendMessage(chatId, { text: t('ai.provide_prompt', {}, userLang) }, { quoted: msg });
+    if (!match) {
+        return sock.sendMessage(chatId, {
+            text: '❌ Please provide a prompt.\n\nExample:\n.banana-ai make the face clearer'
+        }, { quoted: msg });
     }
+
+    await sock.sendMessage(chatId, { text: '🍌 Banana AI is enhancing your image...\nPlease wait ⏳' }, { quoted: msg });
 
     try {
-        await sock.sendMessage(chatId, { react: { text: "🍌", key: msg.key } });
-
-        const buffer = await downloadMediaMessage(quoted, 'buffer', {}, {
+        const buffer = await downloadMediaMessage(targetMessage, 'buffer', {}, {
             logger: undefined,
             reuploadRequest: sock.updateMediaMessage
         });
 
-        if (!buffer) throw new Error("تعذر تحميل الصورة");
+        if (!buffer) throw new Error("Failed to download image");
 
-        // Translate to English
-        const translatedPrompt = await translateToEn(prompt);
+        const resultUrl = await bananaAI(buffer, match);
 
-        const resultBuffer = await bananaAI(buffer, translatedPrompt);
-        await sock.sendMessage(chatId, { image: resultBuffer, caption: `✅ *تم التعديل بنجاح!*\n📝 *الوصف:* ${prompt}` }, { quoted: msg });
-        await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
-
-    } catch (error) {
-        console.error('Error in Banana AI:', error);
-        await sock.sendMessage(chatId, { react: { text: "❌", key: msg.key } });
-        await sendWithChannelButton(sock, chatId, t('ai.error', {}, userLang) + `\n⚠️ السبب: ${error.message}`, msg);
+        await sock.sendMessage(
+            chatId,
+            {
+                image: { url: resultUrl },
+                caption: '✅ Banana AI enhancement completed!'
+            },
+            { quoted: msg }
+        );
+    } catch (e) {
+        console.error('banana-ai error:', e);
+        sock.sendMessage(chatId, { text: '❌ Failed to process image. ' + (e.message || "") }, { quoted: msg });
     }
 }
 

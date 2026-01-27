@@ -11,7 +11,7 @@ function runtime(seconds, lang = 'ar') {
     var h = Math.floor(seconds % (3600 * 24) / 3600);
     var m = Math.floor(seconds % 3600 / 60);
     var s = Math.floor(seconds % 60);
-    
+
     if (lang === 'en') {
         var dDisplay = d > 0 ? d + (d == 1 ? " day, " : " days, ") : "";
         var hDisplay = h > 0 ? h + (h == 1 ? " hour, " : " hours, ") : "";
@@ -147,7 +147,9 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
             let bodyText = `✨ *${icon} قسم ${title}* ✨\n\n`;
             cmds.forEach(cmd => {
                 const displayName = (isArabic && arCmds[cmd]) ? arCmds[cmd] : cmd;
-                bodyText += `▫️ ${prefix}${displayName}\n`;
+                const descText = t(`command_desc.${cmd}`, {}, userLang);
+                const desc = descText.startsWith('command_desc.') ? '' : ` - _${descText}_`;
+                bodyText += `▫️ ${prefix}${displayName}${desc}\n`;
             });
 
             cards.push({
@@ -199,18 +201,18 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                 message: {
                     messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
-                        body: proto.Message.InteractiveMessage.Body.create({ 
+                        body: proto.Message.InteractiveMessage.Body.create({
                             text: `👋 *${L_WELCOME} ${pushname}*\n\n` +
-                                  `🤖 *${L_BOTNAME}:* ${isArabic ? 'حمزة اعمرني' : 'Hamza Amirni'}\n` +
-                                  `👑 *${L_DEV}:* حمزة اعمرني\n` +
-                                  `⏰ *${L_TIME}:* ${time}\n` +
-                                  `📅 *Date:* ${date}\n` +
-                                  `⏳ *${L_UPTIME}:* ${uptime}\n\n` +
-                                  `🔗 *Follow Me:*\n` +
-                                  `📸 *Insta:* ${settings.instagram}\n` +
-                                  `📘 *FB:* ${settings.facebookPage}\n` +
-                                  `👤 *Owner:* wa.me/${settings.ownerNumber[0]}\n\n` +
-                                  `*${L_SWIPE}*`
+                                `🤖 *${L_BOTNAME}:* ${isArabic ? 'حمزة اعمرني' : 'Hamza Amirni'}\n` +
+                                `👑 *${L_DEV}:* حمزة اعمرني\n` +
+                                `⏰ *${L_TIME}:* ${time}\n` +
+                                `📅 *Date:* ${date}\n` +
+                                `⏳ *${L_UPTIME}:* ${uptime}\n\n` +
+                                `🔗 *Follow Me:*\n` +
+                                `📸 *Insta:* ${settings.instagram}\n` +
+                                `📘 *FB:* ${settings.facebookPage}\n` +
+                                `👤 *Owner:* wa.me/${settings.ownerNumber[0]}\n\n` +
+                                `*${L_SWIPE}*`
                         }),
                         footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${botName} 2026` }),
                         header: proto.Message.InteractiveMessage.Header.create({ hasMediaAttachment: false }),

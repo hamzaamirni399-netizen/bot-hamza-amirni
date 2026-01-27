@@ -10,11 +10,11 @@ function loadAutoWelcomeState() {
     try {
         if (fs.existsSync(AUTO_WELCOME_CONFIG)) {
             const data = JSON.parse(fs.readFileSync(AUTO_WELCOME_CONFIG, 'utf8'));
-            return data.enabled !== undefined ? data.enabled : true; // Default: enabled
+            return data.enabled !== undefined ? data.enabled : false; // Default: disabled
         }
-        return true; // Default: enabled
+        return false; // Default: disabled
     } catch (error) {
-        return true;
+        return false;
     }
 }
 

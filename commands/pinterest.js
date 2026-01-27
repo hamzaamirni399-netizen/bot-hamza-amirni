@@ -1,15 +1,16 @@
-// plugin by hamza amirni
 const axios = require("axios");
 const { generateWAMessageContent, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
-const settings = require('../settings');
 
 const base = "https://www.pinterest.com";
 const search = "/resource/BaseSearchResource/get/";
 
 const headers = {
-    'accept': 'application/json, text/javascript, */*',
+    'accept': 'application/json, text/javascript, */*, q=0.01',
     'referer': 'https://www.pinterest.com/',
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+    'x-app-version': 'a9522f',
+    'x-pinterest-appstate': 'active',
+    'x-pinterest-pws-handler': 'www/[username]/[slug].js',
     'x-requested-with': 'XMLHttpRequest'
 };
 
@@ -18,123 +19,159 @@ async function getCookies() {
         const response = await axios.get(base);
         const setHeaders = response.headers['set-cookie'];
         if (setHeaders) {
-            return setHeaders.map(s => s.split(';')[0].trim()).join('; ');
+            const cookies = setHeaders.map(cookieString => cookieString.split(';')[0].trim()).join('; ');
+            return cookies;
         }
         return null;
-    } catch (e) {
+    } catch (error) {
+        console.error("خطأ أثناء جلب الكوكيز:", error);
         return null;
     }
 }
 
 async function searchPinterest(query) {
+    if (!query) {
+        return { status: false, message: "يرجى إدخال كلمة بحث صحيحة!" };
+    }
+
     try {
         const cookies = await getCookies();
+        // Fallback or continue without cookies if failed, sometimes Pinterest works
         const params = {
-            source_url: `/search/pins/?q=${query}`,
+            source_url: `/search/pins/?q=${encodeURIComponent(query)}`,
             data: JSON.stringify({
-                options: { query, scope: "pins", page_size: 10 },
+                options: { isPrefetch: false, query, scope: "pins", bookmarks: [""], page_size: 10 },
                 context: {}
             }),
             _: Date.now()
         };
 
-        const { data } = await axios.get(`${base}${search}`, { 
-            headers: { ...headers, 'cookie': cookies || '' }, 
-            params 
+        const { data } = await axios.get(`${base}${search}`, {
+            headers: {
+                ...headers,
+                'cookie': cookies || ''
+            },
+            params
         });
 
-        const results = data.resource_response.data.results.filter(v => v.images?.orig);
-        if (results.length === 0) return { status: false, message: "No results found." };
+        const results = data.resource_response?.data?.results?.filter(v => v.images?.orig);
+        if (!results || results.length === 0) {
+            return { status: false, message: `لم يتم العثور على نتائج لكلمة البحث: ${query}` };
+        }
 
         return {
             status: true,
-            pins: results.map(v => ({
-                title: v.title || "Untitled",
-                description: v.description || "No description",
-                pin_url: `https://pinterest.com/pin/${v.id}`,
-                image: v.images.orig.url,
-                uploader: v.pinner?.full_name || "Unknown"
+            pins: results.map(result => ({
+                id: result.id,
+                title: result.title || "بدون عنوان",
+                description: result.description || "بدون وصف",
+                pin_url: `https://pinterest.com/pin/${result.id}`,
+                image: result.images.orig.url,
+                uploader: {
+                    username: result.pinner?.username || "unknown",
+                    full_name: result.pinner?.full_name || "Unknown",
+                    profile_url: result.pinner ? `https://pinterest.com/${result.pinner.username}` : "#"
+                }
             }))
         };
-    } catch (e) {
-        return { status: false, message: e.message };
+
+    } catch (error) {
+        console.error('Pinterest Search Error:', error);
+        return { status: false, message: "حدث خطأ أثناء البحث، حاول مرة أخرى لاحقًا." };
     }
 }
 
-module.exports = async (sock, chatId, msg, args, commands, userLang) => {
-    const text = args.join(' ');
-    if (!text) {
-        return sock.sendMessage(chatId, { text: `• *Example:* .pinterest nature` }, { quoted: msg });
+async function pinterestCommand(sock, chatId, msg, args, commands, userLang, match) {
+    const query = match || args.join(' ');
+    if (!query) {
+        return sock.sendMessage(chatId, { text: `• *Example:*\n .pinterest cat` }, { quoted: msg });
     }
 
-    await sock.sendMessage(chatId, { react: { text: "⏳", key: msg.key } });
+    await sock.sendMessage(chatId, { text: '*_`جاري التحميل`_*' }, { quoted: msg });
 
-    async function createImage(url) {
-        try {
-            const { imageMessage } = await generateWAMessageContent({ image: { url } }, { upload: sock.waUploadToServer });
+    try {
+        async function createImage(url) {
+            const { imageMessage } = await generateWAMessageContent({
+                image: { url }
+            }, {
+                upload: sock.waUploadToServer
+            });
             return imageMessage;
-        } catch (e) {
-            console.error(`Pinterest Image Error: ${url}`);
-            // Fallback to a stable image
-            const fallback = 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000';
-            try {
-                const { imageMessage } = await generateWAMessageContent({ image: { url: fallback } }, { upload: sock.waUploadToServer });
-                return imageMessage;
-            } catch (err) {
-                return null;
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
             }
         }
-    }
 
-    let result = await searchPinterest(text);
-    if (!result.status) {
-        return sock.sendMessage(chatId, { text: `⚠️ ${result.message}` }, { quoted: msg });
-    }
+        let result = await searchPinterest(query);
+        if (!result.status) {
+            return sock.sendMessage(chatId, { text: `⚠️ ${result.message}` }, { quoted: msg });
+        }
 
-    let cards = [];
-    let i = 1;
-    for (let pin of result.pins.slice(0, 10)) {
-        const imageMessage = await createImage(pin.image);
-        if (!imageMessage) continue;
+        let pins = result.pins.slice(0, 5); // Reduced to 5 for better performance/reliability
+        shuffleArray(pins);
 
-        cards.push({
-            body: proto.Message.InteractiveMessage.Body.fromObject({
-                text: `📌 *Title:* ${pin.title}\n👤 *Uploader:* ${pin.uploader}\n🔗 *URL:* ${pin.pin_url}`
-            }),
-            footer: proto.Message.InteractiveMessage.Footer.fromObject({
-                text: `乂 ${settings.botName} 🧠`
-            }),
-            header: proto.Message.InteractiveMessage.Header.fromObject({
-                title: `Result ${i++}`,
-                hasMediaAttachment: true,
-                imageMessage
-            }),
-            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                buttons: [
-                    {
-                        "name": "cta_url",
-                        "buttonParamsJson": `{"display_text":"View on Pinterest","url":"${pin.pin_url}"}`
-                    }
-                ]
-            })
-        });
-    }
-
-    const menuMsg = generateWAMessageFromContent(chatId, {
-        viewOnceMessage: {
-            message: {
-                messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
-                interactiveMessage: proto.Message.InteractiveMessage.fromObject({
-                    body: proto.Message.InteractiveMessage.Body.create({ text: `✨ Pinterest Search: *${text}*\n\nSwipe cards to view more results...` }),
-                    footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${settings.botName} 2026` }),
-                    header: proto.Message.InteractiveMessage.Header.create({ hasMediaAttachment: false }),
-                    carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
+        let push = [];
+        let i = 1;
+        for (let pin of pins) {
+            let imageUrl = pin.image;
+            push.push({
+                body: proto.Message.InteractiveMessage.Body.fromObject({
+                    text: `📌 *العنوان:* ${pin.title}\n📝 *الوصف:* ${pin.description}\n👤 *الناشر:* ${pin.uploader.full_name} (@${pin.uploader.username})\n🔗 *الرابط:* ${pin.pin_url}`
+                }),
+                footer: proto.Message.InteractiveMessage.Footer.fromObject({
+                    text: 'Hamza Bot 🧠'
+                }),
+                header: proto.Message.InteractiveMessage.Header.fromObject({
+                    title: `الصورة ${i++}`,
+                    hasMediaAttachment: true,
+                    imageMessage: await createImage(imageUrl)
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                    buttons: [
+                        {
+                            "name": "cta_url",
+                            "buttonParamsJson": `{"display_text":"عرض على Pinterest","url":"${pin.pin_url}"}`
+                        }
+                    ]
                 })
-            }
+            });
         }
-    }, { quoted: msg });
 
-    await sock.relayMessage(chatId, menuMsg.message, { messageId: menuMsg.key.id });
-    await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
-};
+        const bot = generateWAMessageFromContent(chatId, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: {
+                        deviceListMetadata: {},
+                        deviceListMetadataVersion: 2
+                    },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: `نتائج البحث عن: ${query}`
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: 'Hamza Bot 🧠'
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            hasMediaAttachment: false
+                        }),
+                        carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+                            cards: [...push]
+                        })
+                    })
+                }
+            }
+        }, {});
 
+        await sock.relayMessage(chatId, bot.message, { messageId: bot.key.id });
+
+    } catch (err) {
+        console.error('Pinterest command error:', err);
+        await sock.sendMessage(chatId, { text: "❌ حدث خطأ أثناء عرض النتائج." }, { quoted: msg });
+    }
+}
+
+module.exports = pinterestCommand;
