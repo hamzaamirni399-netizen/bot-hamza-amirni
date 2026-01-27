@@ -616,7 +616,8 @@
         "error": "❌ *وقع مشكل ف التحميل. جرب مرة أخرى.*",
         "library_title": "🚀 *مكتبة التطبيقات الناضية*",
         "results_for": "🔍 *ها شنو لقيت لـ:* {query}",
-        "download_btn": "تيليشارجي دابا 📥"
+        "download_btn": "تيليشارجي دابا 📥",
+        "item_desc": "📦 *التطبيق:* {name}\n📏 *الحجم:* {size} MB\n🆔 *الحزمة:* {package}"
     },
     "wallpaper4k": {
         "help": "📌 *كيفاش تخدم هاد 4kwallpaper*:\n\n✅ حسب التصنيف:\n• .4kwallpaper popular\n• .4kwallpaper featured\n• .4kwallpaper random\n• .4kwallpaper collection\n\n🔍 للبحث:\n• .4kwallpaper search nature\n\n📥 للتحميل:\n• .4kwallpaper dl [رابط]",

@@ -322,7 +322,8 @@
         "error": "❌ *Error downloading APK. Please try again.*",
         "library_title": "🚀 *Premium APK Library*",
         "results_for": "🔍 *Search Results for:* {query}",
-        "download_btn": "Download Now 📥"
+        "download_btn": "Download Now 📥",
+        "item_desc": "📦 *App:* {name}\n📏 *Size:* {size} MB\n🆔 *Package:* {package}"
     },
     "group": {
         "bot_admin": "Please make the bot an admin first.",
