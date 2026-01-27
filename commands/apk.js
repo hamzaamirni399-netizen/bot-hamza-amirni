@@ -106,7 +106,7 @@ async function apkCommand(sock, chatId, msg, args, commands, userLang) {
 
             cards.push({
                 body: proto.Message.InteractiveMessage.Body.fromObject({
-                    text: `📦 *App:* ${app.name}\n📏 *Size:* ${size} MB\n🆔 *Package:* ${pkg}`
+                    text: t('apk.item_desc', { name: app.name, size, package: pkg }, userLang)
                 }),
                 footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${settings.botName} 🧠` }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({

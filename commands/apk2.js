@@ -45,10 +45,10 @@ async function apk2Command(sock, chatId, msg, args, commands, userLang) {
             const imageMessage = await createHeaderImage(app.icon || 'https://ui-avatars.com/api/?name=APK&background=random&size=512');
             const pkg = app.package || app.id || 'N/A';
             const size = app.sizeMB || (app.size ? (app.size / (1024 * 1024)).toFixed(2) : 'N/A');
-            
+
             cards.push({
                 body: proto.Message.InteractiveMessage.Body.fromObject({
-                    text: `📦 *App:* ${app.name}\n📏 *Size:* ${size} MB\n🆔 *Package:* ${pkg}`
+                    text: t('apk.item_desc', { name: app.name, size, package: pkg }, userLang)
                 }),
                 footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${settings.botName} 🧠` }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
