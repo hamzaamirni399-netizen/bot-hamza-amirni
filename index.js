@@ -700,10 +700,12 @@ ${settings.portfolio}
                 if (c.status === 'offer') {
                     try {
                         const settings = require('./settings');
-                        // Send warning message before rejecting and blocking
+                        const isBlockMode = state.action === 'block';
+
+                        // Dynamic Warning Message
                         const warningMsg = `📵 *تنبيه: المكالمات ممنوعة!*
 
-عذراً، المكالمات غير مسموح بها. سيتم رفض المكالمة وحظرك تلقائياً! 🚫
+عذراً، المكالمات غير مسموح بها.${isBlockMode ? ' سيتم رفض المكالمة وحظرك تلقائياً! 🚫' : ' سيتم رفض المكالمة. يرجى عدم التكرار!'}
 
 💻 *شعارنا: نحن نطور مستقبلك الرقمي*
 ✨ خدماتنا: تصميم المواقع وبوتات واتساب المتطورة.
@@ -714,15 +716,11 @@ ${settings.portfolio}
 🔗 *تابعني لتبقى على اتصال:*
 📸 *Instagram:* ${settings.instagram}
 👤 *Facebook:* ${settings.facebookPage}
-✈️ *Telegram:* ${settings.telegram}
-🎥 *YouTube:* ${settings.youtube}
-👥 *المجموعات:* ${settings.waGroups}
 🔔 *القناة:* ${settings.officialChannel}
 
 🛡️ *بواسطة:* ${settings.botName}`;
 
                         await sock.sendMessage(c.from, { text: warningMsg });
-
 
                         // Small delay before rejecting to ensure message is sent
                         await new Promise(resolve => setTimeout(resolve, 500));
@@ -730,16 +728,22 @@ ${settings.portfolio}
                         // Reject the call
                         await sock.rejectCall(c.id, c.from);
 
-                        // Block the caller
-                        await sock.updateBlockStatus(c.from, 'block');
+                        // Block the caller ONLY if action is 'block'
+                        if (isBlockMode) {
+                            await sock.updateBlockStatus(c.from, 'block');
+                            console.log(`📞 Rejected call from ${c.from}, sent warning, and blocked user`);
+                        } else {
+                            console.log(`📞 Rejected call from ${c.from}, sent warning (No Block)`);
+                        }
 
-                        console.log(`📞 Rejected call from ${c.from}, sent warning, and blocked user`);
                     } catch (error) {
                         console.error('Error handling call rejection:', error);
                         // Still try to reject even if message fails
                         try {
                             await sock.rejectCall(c.id, c.from);
-                            await sock.updateBlockStatus(c.from, 'block');
+                            if (state.action === 'block') {
+                                await sock.updateBlockStatus(c.from, 'block');
+                            }
                         } catch (e) {
                             console.error('Failed to reject/block call:', e);
                         }
