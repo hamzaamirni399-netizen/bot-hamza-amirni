@@ -15,6 +15,11 @@ async function qdlCommand(sock, chatId, msg, args, commands, userLang) {
 
     await sock.sendMessage(chatId, { react: { text: "⏳", key: msg.key } });
 
+    // Send loading message
+    const loadingMsg = await sock.sendMessage(chatId, {
+        text: "⏳ جاري تحميل السورة...\n⏳ Loading Surah..."
+    }, { quoted: msg });
+
     try {
         const response = await axios.get(`https://mp3quran.net/api/v3/reciters?language=ar&reciter=${reciterId}`, { timeout: 30000 });
         const reciter = response.data.reciters[0];
@@ -41,6 +46,11 @@ async function qdlCommand(sock, chatId, msg, args, commands, userLang) {
 
         const sName = surahNames[parseInt(surahNumber) - 1] || "سورة";
 
+        // Delete loading message
+        try {
+            await sock.sendMessage(chatId, { delete: loadingMsg.key });
+        } catch (e) { }
+
         await sock.sendMessage(chatId, {
             audio: { url: audioUrl },
             mimetype: 'audio/mpeg',
@@ -51,7 +61,7 @@ async function qdlCommand(sock, chatId, msg, args, commands, userLang) {
                     title: `📖 ${sName}`,
                     body: `القارئ: ${reciter.name}`,
                     mediaType: 2,
-                    thumbnailUrl: "https:// telegra.ph/file/ed156b8207f2ef84fbf8d.jpg"
+                    thumbnailUrl: "https://telegra.ph/file/ed156b8207f2ef84fbf8d.jpg"
                 }
             }
         }, { quoted: msg });
@@ -60,7 +70,16 @@ async function qdlCommand(sock, chatId, msg, args, commands, userLang) {
 
     } catch (e) {
         console.error('Error in qdl:', e);
-        await sock.sendMessage(chatId, { text: "❌ فشل تحميل السورة. تأكد من أن السورة متوفرة لهذا القارئ." }, { quoted: msg });
+
+        // Delete loading message
+        try {
+            await sock.sendMessage(chatId, { delete: loadingMsg.key });
+        } catch (err) { }
+
+        await sock.sendMessage(chatId, {
+            text: "❌ فشل تحميل السورة. تأكد من أن السورة متوفرة لهذا القارئ.\n❌ Failed to download. Please verify the Surah is available for this reciter."
+        }, { quoted: msg });
+        await sock.sendMessage(chatId, { react: { text: "❌", key: msg.key } });
     }
 }
 
