@@ -158,7 +158,7 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
                 }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: r.name,
-                    hasMediaAttachment: true,
+                    hasMediaAttachment: !!sharedImageMessage, // Only true if image exists
                     imageMessage: sharedImageMessage
                 }),
                 nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({ buttons })
