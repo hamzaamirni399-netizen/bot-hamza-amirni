@@ -165,6 +165,7 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
             };
         });
 
+        const title = targetSurahId ? `🎧 *اختر القارئ لسورة ${targetSurahId}*` : "🕌 *قائمة القراء*";
         const botMsg = generateWAMessageFromContent(chatId, {
             viewOnceMessage: {
                 message: {
