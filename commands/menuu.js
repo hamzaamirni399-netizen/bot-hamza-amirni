@@ -159,7 +159,6 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
 
             cards.push({
                 body: proto.Message.InteractiveMessage.Body.fromObject({ text: bodyText }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${botName} 🧠` }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: `قائمة ${title}`,
                     hasMediaAttachment: true,
@@ -219,7 +218,7 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                                 `👑 *المطور:* wa.me/${settings.ownerNumber[0]}\n\n` +
                                 `*${L_SWIPE}*`
                         }),
-                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${botName} 2026` }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `🤖 ${botName}` }),
                         header: proto.Message.InteractiveMessage.Header.create({ hasMediaAttachment: false }),
                         carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
                     })

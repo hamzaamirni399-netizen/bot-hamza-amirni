@@ -42,7 +42,6 @@ async function apk3Command(sock, chatId, msg, args, commands, userLang) {
                 body: proto.Message.InteractiveMessage.Body.fromObject({
                     text: `🎮 *App:* ${app.name}\n📏 *Size:* ${size} MB\n🆔 *Pkg:* ${pkg}`
                 }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${settings.botName} 🧠` }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: app.author || app.name,
                     hasMediaAttachment: true,
@@ -60,7 +59,7 @@ async function apk3Command(sock, chatId, msg, args, commands, userLang) {
                     messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
                         body: proto.Message.InteractiveMessage.Body.create({ text: `${L_LIB}\n\n${L_RESULTS}` }),
-                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${settings.botName}` }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `🤖 ${settings.botName}` }),
                         carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
                     })
                 }

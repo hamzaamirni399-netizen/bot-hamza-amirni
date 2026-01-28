@@ -122,9 +122,6 @@ async function pinterestCommand(sock, chatId, msg, args, commands, userLang, mat
                 body: proto.Message.InteractiveMessage.Body.fromObject({
                     text: `📌 *العنوان:* ${pin.title}\n📝 *الوصف:* ${pin.description}\n👤 *الناشر:* ${pin.uploader.full_name} (@${pin.uploader.username})\n🔗 *الرابط:* ${pin.pin_url}`
                 }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({
-                    text: 'Hamza Bot 🧠'
-                }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: `الصورة ${i++}`,
                     hasMediaAttachment: true,
@@ -153,7 +150,7 @@ async function pinterestCommand(sock, chatId, msg, args, commands, userLang, mat
                             text: `نتائج البحث عن: ${query}`
                         }),
                         footer: proto.Message.InteractiveMessage.Footer.create({
-                            text: 'Hamza Bot 🧠'
+                            text: '🤖 Hamza Bot'
                         }),
                         header: proto.Message.InteractiveMessage.Header.create({
                             hasMediaAttachment: false

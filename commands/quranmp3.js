@@ -2,6 +2,7 @@ const axios = require('axios');
 const { generateWAMessageContent, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
 const settings = require('../settings');
 const { t } = require('../lib/language');
+const { getSurahNumber } = require('../lib/quranUtils');
 
 /**
  * قرآن MP3 - البحث عن القراء وعرضهم في بطاقات
@@ -16,10 +17,34 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
         const response = await axios.get('https://mp3quran.net/api/v3/reciters?language=ar', { timeout: 10000 });
         let reciters = response.data.reciters;
 
-        if (query) {
+        // Try to verify if the input is a Surah (Name or Number)
+        let targetSurahId = null;
+        let reciterQuery = "";
+
+        // Check if the full query resolves to a Surah ID directly (e.g. "fatiha", "1", "baqarah")
+        const directSurahId = getSurahNumber(query);
+
+        if (directSurahId) {
+            targetSurahId = directSurahId;
+            // If the whole query is a surah name, we show popular reciters (no reciter filter)
+        } else if (args.length > 1) {
+            // Maybe "quranmp3 fatiha suday" -> Surah: fatiha, Reciter: suday?
+            // Let's try first arg as surah
+            const firstArgSurahId = getSurahNumber(args[0]);
+            if (firstArgSurahId) {
+                targetSurahId = firstArgSurahId;
+                reciterQuery = args.slice(1).join(" ");
+            }
+        }
+
+        // Filter Reciters
+        if (reciterQuery) {
+            reciters = reciters.filter(r => r.name.toLowerCase().includes(reciterQuery.toLowerCase()));
+        } else if (!targetSurahId && query) {
+            // If no surah found, assume the query is for a reciter
             reciters = reciters.filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
         } else {
-            // Show popular ones if no query
+            // No reciter query (either popular list for specific surah, or generic list)
             const popularNames = ['مشاري العفاسي', 'عبد الباسط عبد الصمد', 'ماهر المعيقلي', 'سعود الشريم', 'ياسر الدوسري', 'أحمد العجمي', 'سعد الغامدي', 'فارس عباد', 'منشاوي', 'الحصري'];
             reciters = reciters.filter(r => popularNames.some(p => r.name.includes(p))).slice(0, 10);
         }
@@ -59,31 +84,38 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
                 body: proto.Message.InteractiveMessage.Body.fromObject({
                     text: `👤 *القارئ:* ${r.name}\n📖 *الرواية:* ${moshafName}\n🔢 *عدد السور:* ${r.moshaf[0]?.surah_total || '114'}`
                 }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({
-                    text: `乂 ${settings.botName} ☪️`
-                }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: "القرآن الكريم",
                     hasMediaAttachment: true,
                     imageMessage
                 }),
                 nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                    buttons: [
-                        {
-                            "name": "quick_reply",
-                            "buttonParamsJson": JSON.stringify({
-                                display_text: "📜 قائمة السور",
-                                id: `${settings.prefix}quransurah ${r.id}`
-                            })
-                        },
-                        {
-                            "name": "quick_reply",
-                            "buttonParamsJson": JSON.stringify({
-                                display_text: "📖 سورة البقرة",
-                                id: `${settings.prefix}qdl ${r.id} 002`
-                            })
-                        }
-                    ]
+                    buttons: targetSurahId ?
+                        [
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": JSON.stringify({
+                                    display_text: `🎧 تحميل سورة ${targetSurahId}`,
+                                    id: `${settings.prefix}qdl ${r.id} ${targetSurahId}`
+                                })
+                            }
+                        ] :
+                        [
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": JSON.stringify({
+                                    display_text: "📜 قائمة السور",
+                                    id: `${settings.prefix}quransurah ${r.id}`
+                                })
+                            },
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": JSON.stringify({
+                                    display_text: "📖 سورة البقرة",
+                                    id: `${settings.prefix}qdl ${r.id} 002`
+                                })
+                            }
+                        ]
                 })
             });
         }
@@ -97,7 +129,7 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
                     messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
                         body: proto.Message.InteractiveMessage.Body.create({ text: `${title}\n${subtitle}` }),
-                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${settings.botName}` }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `乂 ${settings.botName} ☪️` }),
                         carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
                     })
                 }

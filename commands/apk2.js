@@ -50,7 +50,6 @@ async function apk2Command(sock, chatId, msg, args, commands, userLang) {
                 body: proto.Message.InteractiveMessage.Body.fromObject({
                     text: t('apk.item_desc', { name: app.name, size, package: pkg }, userLang)
                 }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${settings.botName} 🧠` }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: app.name,
                     hasMediaAttachment: true,
@@ -68,7 +67,7 @@ async function apk2Command(sock, chatId, msg, args, commands, userLang) {
                     messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
                         body: proto.Message.InteractiveMessage.Body.create({ text: `${L_LIB}\n\n${L_RESULTS}` }),
-                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${settings.botName} 2026` }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `🤖 ${settings.botName}` }),
                         carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
                     })
                 }

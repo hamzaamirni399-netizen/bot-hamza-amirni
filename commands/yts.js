@@ -46,9 +46,6 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                 body: proto.Message.InteractiveMessage.Body.fromObject({
                     text: `🎬 *${v.title}*\n⏱️ *Duration:* ${v.timestamp}\n👀 *Views:* ${v.views}\n📅 *Uploaded:* ${v.ago}`
                 }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({
-                    text: `乂 ${settings.botName} 🧠`
-                }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: v.author.name,
                     hasMediaAttachment: true,
@@ -75,7 +72,7 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                     messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
                         body: proto.Message.InteractiveMessage.Body.create({ text: `${L_LIB}\n\n${L_RESULTS}` }),
-                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${settings.botName}` }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `🤖 ${settings.botName}` }),
                         carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards })
                     })
                 }
