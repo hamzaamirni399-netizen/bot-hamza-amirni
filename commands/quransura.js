@@ -1,4 +1,4 @@
-const { generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
+const { generateWAMessageFromContent, proto, generateWAMessageContent } = require('@whiskeysockets/baileys');
 const settings = require('../settings');
 
 async function quranSuraCommand(sock, chatId, msg, args, commands, userLang) {
@@ -25,6 +25,15 @@ async function quranSuraCommand(sock, chatId, msg, args, commands, userLang) {
 
     const sName = surahNames[parseInt(surahId) - 1] || "سورة";
 
+    // Header Image (Unified Style)
+    const imageUrl = 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?q=80&w=1000&auto=format&fit=crop';
+    let imageMessage = null;
+    try {
+        const gen = await generateWAMessageContent({ image: { url: imageUrl } }, { upload: sock.waUploadToServer });
+        imageMessage = gen.imageMessage;
+    } catch (e) { }
+
+
     const msgContent = generateWAMessageFromContent(chatId, {
         viewOnceMessage: {
             message: {
@@ -34,7 +43,7 @@ async function quranSuraCommand(sock, chatId, msg, args, commands, userLang) {
                 },
                 interactiveMessage: proto.Message.InteractiveMessage.fromObject({
                     body: proto.Message.InteractiveMessage.Body.create({
-                        text: `✨ *سورة ${sName}*\n\nماذا تريد أن تفعل؟ 🤔`
+                        text: `📖 *سورة ${sName}*\n\nكيف تريد عرض هذه السورة؟\n\n🎧 *صوت:* استماع وتحميل (MP3)\n📖 *قراءة:* نص مكتوب\n📄 *ملف:* تحميل كملف (Document)`
                     }),
                     footer: proto.Message.InteractiveMessage.Footer.create({
                         text: `乂 ${settings.botName}`
@@ -42,18 +51,16 @@ async function quranSuraCommand(sock, chatId, msg, args, commands, userLang) {
                     header: proto.Message.InteractiveMessage.Header.create({
                         title: `📖 سورة ${sName}`,
                         subtitle: "اختر نوع العرض",
-                        hasMediaAttachment: false
+                        hasMediaAttachment: !!imageMessage,
+                        imageMessage: imageMessage
                     }),
                     nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
                         buttons: [
                             {
                                 "name": "quick_reply",
                                 "buttonParamsJson": JSON.stringify({
-                                    display_text: "🎧 استماع (اختر القارئ)",
-                                    id: `${settings.prefix}quranmp3 ${surahId}`
-                                    // Better: Redirect to quranmp3 to chose reciter first?
-                                    // User asked: "fatiha y3tini n5tar l9ari2"
-                                    // So let's redirect to .quranmp3search <surahId> (New logic needed there)
+                                    display_text: "🎧 استماع (Audio)",
+                                    id: `${settings.prefix}quranmp3 ${surahId} --audio`
                                 })
                             },
                             {
@@ -61,6 +68,13 @@ async function quranSuraCommand(sock, chatId, msg, args, commands, userLang) {
                                 "buttonParamsJson": JSON.stringify({
                                     display_text: "📖 قراءة (Text)",
                                     id: `${settings.prefix}quranread ${surahId}`
+                                })
+                            },
+                            {
+                                "name": "quick_reply",
+                                "buttonParamsJson": JSON.stringify({
+                                    display_text: "� ملف (File/PDF)",
+                                    id: `${settings.prefix}quranpdf ${surahId}`
                                 })
                             }
                         ]
