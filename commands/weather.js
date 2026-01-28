@@ -96,9 +96,16 @@ module.exports = async function weatherCommand(sock, chatId, msg, args) {
             viewOnceMessage: {
                 message: {
                     interactiveMessage: proto.Message.InteractiveMessage.fromObject({
-                        ...card,
-                        carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
-                            cards: [card]
+                        body: proto.Message.InteractiveMessage.Body.create({ text: weatherBody }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `乂 ${settings.botName} 🌍` }),
+                        header: proto.Message.InteractiveMessage.Header.create({ title: `حالة الطقس في ${d.location}`, hasMediaAttachment: true, imageMessage: genImage.imageMessage }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                            buttons: [
+                                {
+                                    "name": "quick_reply",
+                                    "buttonParamsJson": JSON.stringify({ display_text: "تحديث 🔄", id: `${settings.prefix}weather ${city}` })
+                                }
+                            ]
                         })
                     })
                 }

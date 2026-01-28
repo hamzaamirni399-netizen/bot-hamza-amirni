@@ -6,83 +6,124 @@ const settings = require('../settings');
 const { getSurahNumber } = require('../lib/quranUtils');
 const { setSession } = require('../lib/quranSession');
 
-async function quranCommand(sock, chatId, message, args, commands, userLang) {
+async function quranCommand(sock, chatId, msg, args, commands, userLang) {
+    const { generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
+
+    // Surahs List
+    const surahs = [
+        "1. الفاتحة (Al-Fatiha)", "2. البقرة (Al-Baqarah)", "3. آل عمران (Al-Imran)", "4. النساء (An-Nisa)",
+        "5. المائدة (Al-Ma'idah)", "6. الأنعام (Al-An'am)", "7. الأعراف (Al-A'raf)", "8. الأنفال (Al-Anfal)",
+        "9. التوبة (At-Tawbah)", "10. يونس (Yunus)", "11. هود (Hud)", "12. يوسف (Yusuf)", "13. الرعد (Ar-Ra'd)",
+        "14. إبراهيم (Ibrahim)", "15. الحجر (Al-Hijr)", "16. النحل (An-Nahl)", "17. الإسراء (Al-Isra)",
+        "18. الكهف (Al-Kahf)", "19. مريم (Maryam)", "20. طه (Taha)", "21. الأنبياء (Al-Anbiya)",
+        "22. الحج (Al-Hajj)", "23. المؤمنون (Al-Mu'minun)", "24. النور (An-Nur)", "25. الفرقان (Al-Furqan)",
+        "26. الشعراء (Ash-Shu'ara)", "27. النمل (An-Naml)", "28. القصص (Al-Qasas)", "29. العنكبوت (Al-Ankabut)",
+        "30. الروم (Ar-Rum)", "31. لقمان (Luqman)", "32. السجدة (As-Sajdah)", "33. الأحزاب (Al-Ahzab)",
+        "34. سبأ (Saba)", "35. فاطر (Fatir)", "36. يس (Ya-Sin)", "37. الصافات (As-Saffat)", "38. ص (Sad)",
+        "39. الزمر (Az-Zumar)", "40. غافر (Ghafir)", "41. فصلت (Fussilat)", "42. الشورى (Ash-Shura)",
+        "43. الزخرف (Az-Zukhruf)", "44. الدخان (Ad-Dukhan)", "45. الجاثية (Al-Jathiya)", "46. الأحقاف (Al-Ahqaf)",
+        "47. محمد (Muhammad)", "48. الفتح (Al-Fath)", "49. الحجرات (Al-Hujurat)", "50. ق (Qaf)",
+        "51. الذاريات (Adh-Dhariyat)", "52. الطور (At-Tur)", "53. النجم (An-Najm)", "54. القمر (Al-Qamar)",
+        "55. الرحمن (Ar-Rahman)", "56. الواقعة (Al-Waqi'a)", "57. الحديد (Al-Hadid)", "58. المجادلة (Al-Mujadila)",
+        "59. الحشر (Al-Hashr)", "60. الممتحنة (Al-Mumtahana)", "61. الصف (As-Saff)", "62. الجمعة (Al-Jumu'a)",
+        "63. المنافقون (Al-Munafiqun)", "64. التغابن (At-Taghabun)", "65. الطلاق (At-Talaq)", "66. التحريم (At-Tahrim)",
+        "67. الملك (Al-Mulk)", "68. القلم (Al-Qalam)", "69. الحاقة (Al-Haqqah)", "70. المعارج (Al-Ma'arij)",
+        "71. نوح (Nuh)", "72. الجن (Al-Jinn)", "73. المزمل (Al-Muzzammil)", "74. المدثر (Al-Muddathir)",
+        "75. القيامة (Al-Qiyamah)", "76. الإنسان (Al-Insan)", "77. المرسلات (Al-Mursalat)", "78. النبأ (An-Naba')",
+        "79. النازعات (An-Nazi'at)", "80. عبس (Abasa)", "81. التكوير (At-Takwir)", "82. الانفطار (Al-Infitar)",
+        "83. المطففين (Al-Mutaffifin)", "84. الانشقاق (Al-Inshiqaq)", "85. البروج (Al-Buruj)", "86. الطارق (At-Tariq)",
+        "87. الأعلى (Al-A'la)", "88. الغاشية (Al-Ghashiyah)", "89. الفجر (Al-Fajr)", "90. البلد (Al-Balad)",
+        "91. الشمس (Ash-Shams)", "92. الليل (Al-Layl)", "93. الضحى (Ad-Duhaa)", "94. الشرح (Ash-Sharh)",
+        "95. التين (At-Tin)", "96. العلق (Al-Alaq)", "97. القدر (Al-Qadr)", "98. البينة (Al-Bayyinah)",
+        "99. الزلزلة (Az-Zalzalah)", "100. العاديات (Al-Adiyat)", "101. القارعة (Al-Qari'ah)", "102. التكاثر (At-Takathur)",
+        "103. العصر (Al-Asr)", "104. الهمزة (Al-Humazah)", "105. الفيل (Al-Fil)", "106. قريش (Quraysh)",
+        "107. الماعون (Al-Ma'un)", "108. الكوثر (Al-Kawthar)", "109. الكافرون (Al-Kafirun)", "110. النصر (An-Nasr)",
+        "111. المسد (Al-Masad)", "112. الإخلاص (Al-Ikhlas)", "113. الفلق (Al-Falaq)", "114. الناس (An-Nas)"
+    ];
+
     try {
-        const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        const inputArgs = text.split(' ').slice(1).join(' ').trim();
+        // Create List Sections
+        const sections = [
+            {
+                title: "📜 قائمة السور (1-30)",
+                rows: surahs.slice(0, 30).map((s, i) => ({
+                    header: "",
+                    title: s,
+                    description: "",
+                    id: `${settings.prefix}quransura ${i + 1}`
+                }))
+            },
+            {
+                title: "📜 قائمة السور (31-60)",
+                rows: surahs.slice(30, 60).map((s, i) => ({
+                    header: "",
+                    title: s,
+                    description: "",
+                    id: `${settings.prefix}quransura ${i + 31}`
+                }))
+            },
+            {
+                title: "📜 قائمة السور (61-90)",
+                rows: surahs.slice(60, 90).map((s, i) => ({
+                    header: "",
+                    title: s,
+                    description: "",
+                    id: `${settings.prefix}quransura ${i + 61}`
+                }))
+            },
+            {
+                title: "📜 قائمة السور (91-114)",
+                rows: surahs.slice(90, 114).map((s, i) => ({
+                    header: "",
+                    title: s,
+                    description: "",
+                    id: `${settings.prefix}quransura ${i + 91}`
+                }))
+            }
+        ];
 
-        if (!inputArgs) {
-            await sendWithChannelButton(sock, chatId, t('quran.enter_number', {}, userLang), message);
-            return;
-        }
+        const listMessage = {
+            title: "📖 *القرآن الكريم*",
+            sections
+        };
 
-        const surahNumber = getSurahNumber(inputArgs);
+        const msgContent = generateWAMessageFromContent(chatId, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: {
+                        deviceListMetadata: {},
+                        deviceListMetadataVersion: 2
+                    },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        body: proto.Message.InteractiveMessage.Body.create({
+                            text: `🕌 *أهلاً بك في قسم القرآن الكريم*\n\nيرجى الضغط على الزر واختيار السورة من القائمة 👇`
+                        }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({
+                            text: `乂 ${settings.botName}`
+                        }),
+                        header: proto.Message.InteractiveMessage.Header.create({
+                            title: "القرآن الكريم",
+                            subtitle: "قائمة السور",
+                            hasMediaAttachment: false
+                        }),
+                        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                            buttons: [
+                                {
+                                    "name": "single_select",
+                                    "buttonParamsJson": JSON.stringify(listMessage)
+                                }
+                            ]
+                        })
+                    })
+                }
+            }
+        }, { quoted: msg });
 
-        if (!surahNumber) {
-            await sendWithChannelButton(sock, chatId, t('quran.not_found', {}, userLang), message);
-            return;
-        }
+        await sock.relayMessage(chatId, msgContent.message, { messageId: msgContent.key.id });
 
-        if (surahNumber < 1 || surahNumber > 114) {
-            await sendWithChannelButton(sock, chatId, t('quran.invalid_number', {}, userLang), message);
-            return;
-        }
-
-        const apiUrl = `https://api.alquran.cloud/v1/surah/${surahNumber}`;
-        const response = await axios.get(apiUrl);
-        if (!response.data || response.data.status !== 'OK') {
-            await sendWithChannelButton(sock, chatId, t('quran.fetch_error', {}, userLang), message);
-            return;
-        }
-
-        const surah = response.data.data;
-        const name = surah.name;
-        const englishName = surah.englishName;
-        const ayahs = surah.ayahs || [];
-
-        let textParts = [];
-        textParts.push(t('quran.surah_info', { name, englishName, length: ayahs.length }, userLang));
-        textParts.push('━━━━━━━━━━━━━━━━━━━━');
-
-        const ayahsPerPage = 30;
-        const maxAyahs = Math.min(ayahs.length, ayahsPerPage);
-
-        for (let i = 0; i < maxAyahs; i++) {
-            const a = ayahs[i];
-            textParts.push(`${a.numberInSurah}. ${a.text}`);
-        }
-
-        if (ayahs.length > maxAyahs) {
-            textParts.push('\n━━━━━━━━━━━━━━━━━━━━');
-            textParts.push(t('quran.hidden_ayahs', {}, userLang));
-            textParts.push(t('quran.continue_tip', { prefix: settings.prefix }, userLang));
-
-            // Save session for .continue
-            setSession(chatId, {
-                surahNumber,
-                name,
-                englishName,
-                lastIndex: maxAyahs,
-                totalAyahs: ayahs.length
-            });
-        }
-
-        textParts.push('\n━━━━━━━━━━━━━━━━━━━━');
-        textParts.push(t('quran.sending_audio', {}, userLang));
-
-        const caption = textParts.join('\n');
-
-        await sendWithChannelButton(sock, chatId, caption, message);
-
-        const audioUrl = `https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/${surahNumber}.mp3`;
-        await sock.sendMessage(chatId, {
-            audio: { url: audioUrl },
-            mimetype: 'audio/mpeg',
-            ptt: false
-        }, { quoted: message });
-    } catch (error) {
-        console.error('Error in quran command:', error);
-        await sendWithChannelButton(sock, chatId, t('quran.error', {}, userLang), message);
+    } catch (e) {
+        console.error("Error sending quran list:", e);
+        await sock.sendMessage(chatId, { text: "❌ حدث خطأ في عرض القائمة." });
     }
 }
 

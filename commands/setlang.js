@@ -67,7 +67,6 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
             const imageMessage = await createHeaderImage(card.img);
             carouselCards.push({
                 body: proto.Message.InteractiveMessage.Body.fromObject({ text: card.body }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: `乂 ${settings.botName} 🌐` }),
                 header: proto.Message.InteractiveMessage.Header.fromObject({
                     title: card.title,
                     hasMediaAttachment: true,
@@ -89,7 +88,7 @@ module.exports = async (sock, chatId, msg, args, commands, userLang) => {
                                 `Please select your preferred language below.\n` +
                                 `المرجو اختيار لغتك المفضلة أسفله.`
                         }),
-                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `© ${settings.botName}` }),
+                        footer: proto.Message.InteractiveMessage.Footer.create({ text: `乂 ${settings.botName} 🌐` }),
                         carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({ cards: carouselCards })
                     })
                 }
