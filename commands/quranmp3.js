@@ -41,63 +41,101 @@ const surahList = [
 async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
     let query = args.join(' ').trim();
     const isAudioRequest = query.includes('--audio');
+    const isMoreRequest = query.includes('--more');
 
-    // Clean query if internal flag is present
-    if (isAudioRequest) {
-        query = query.replace('--audio', '').trim();
-    }
+    // Clean query
+    if (isAudioRequest) query = query.replace('--audio', '').trim();
+    if (isMoreRequest) query = query.replace('--more', '').trim();
 
     await sock.sendMessage(chatId, { react: { text: "🕌", key: msg.key } });
 
-    // 1. Check if it's a Surah Request (and NOT already an audio specific request)
-    // If user typed: ".quran fatiha" -> Detects Surah 1 -> Shows Format Card
-    // If user clicked "Audio" on Format Card -> Command became ".quranmp3 fatiha --audio" -> Detects Surah 1 but isAudioRequest is true -> Skips to reciters
-
+    // 1. Check if it's a Surah Request (and NOT already a specific request)
     const directSurahId = getSurahNumber(query);
 
-    if (directSurahId && !isAudioRequest) {
+    if (directSurahId && !isAudioRequest && !isMoreRequest) {
         return showSurahOptions(sock, chatId, msg, directSurahId);
     }
 
-    // Also handle case where query is empty (Main Menu)
-    if (!query) {
-        // Just show general menu or maybe default to Reciter list?
-        // User asked for "quran brito ywli hta quranmp3 nfs lhaja" (same as quranmp3).
-        // Since .quran is alias to .quranmp3, if no args, we usually show popular reciters.
-        // But maybe we should show a General Choice Card?
-        // Let's stick to showing popular reciters OR a helper message. 
-        // Given user wants "add to card choose audio/text/pdf", this implies when they WANT a surah.
-        // So for empty query, we proceed to Popular Reciters as usual (Carousel of reciters).
-    }
-
-    // 2. Reciter Logic (Existing/Refined for Audio)
     try {
         const response = await axios.get('https://mp3quran.net/api/v3/reciters?language=ar', { timeout: 10000 });
         let reciters = response.data.reciters;
         if (!reciters) throw new Error("No data");
 
+        // Determine target Surah
         let targetSurahId = null;
         let reciterQuery = "";
 
-        // If we entered here with directSurahId (because isAudioRequest is true), set target
         if (directSurahId) {
             targetSurahId = directSurahId;
         } else if (args.length > 1) {
             const firstArgSurahId = getSurahNumber(args[0]);
             if (firstArgSurahId) {
                 targetSurahId = firstArgSurahId;
-                reciterQuery = args.slice(1).join(" ").replace('--audio', '').trim();
+                reciterQuery = args.slice(1).join(" ").replace('--audio', '').replace('--more', '').trim();
             }
         }
 
-        // Filter
+        // --- Handle List Request (Show ALL Reciters) ---
+        if (isMoreRequest && targetSurahId) {
+            // Sort reciters alphabetically
+            reciters.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+            // Limit to avoid limits (e.g. 100)
+            const listReciters = reciters.slice(0, 50);
+            // Note: WA List Messages have limits. We'll show top 50 alphabetical.
+
+            const sections = [{
+                title: "اختر القارئ",
+                rows: listReciters.map(r => ({
+                    header: r.name,
+                    title: r.name,
+                    description: r.moshaf[0]?.name || "مصحف",
+                    id: `${settings.prefix}qdl ${r.id} ${targetSurahId}`
+                }))
+            }];
+
+            const listMsg = generateWAMessageFromContent(chatId, {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: `🎧 *قائمة القراء المتاحة لسورة ${targetSurahId}* (أ-ي)\n⬇️ اختر قارئًا للتحميل:`
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: `乂 ${settings.botName}`
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                title: "📜 قائمة القراء الكاملة",
+                                subtitle: "اختر القارئ",
+                                hasMediaAttachment: false
+                            }),
+                            listMessage: proto.Message.InteractiveMessage.ListMessage.fromObject({
+                                buttonText: "اضغط لاختيار القارئ",
+                                description: "قائمة القراء",
+                                sections: sections
+                            })
+                        })
+                    }
+                }
+            }, { quoted: msg });
+
+            return await sock.relayMessage(chatId, listMsg.message, { messageId: listMsg.key.id });
+        }
+
+
+        // --- Normal Carousel Logic (Popular Reciters) ---
+
+        // Filter if query exists (and isn't the surah ID itself)
         if (reciterQuery) {
             reciters = reciters.filter(r => r.name.toLowerCase().includes(reciterQuery.toLowerCase()));
         } else if (!targetSurahId && query) {
-            // Check if query isn't just the surah name (which we already handled or isAudioRequest handled)
             reciters = reciters.filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
         } else {
-            // Popular
+            // Popular Filter
             const popularNames = ['مشاري العفاسي', 'عبد الباسط عبد الصمد', 'ماهر المعيقلي', 'سعود الشريم', 'ياسر الدوسري', 'أحمد العجمي', 'سعد الغامدي', 'فارس عباد', 'منشاوي', 'الحصري', 'إسلام صبحي', 'هزاع البلوشي'];
             reciters = reciters.filter(r => popularNames.some(p => r.name.includes(p))).slice(0, 12);
         }
@@ -106,6 +144,7 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
             return await sock.sendMessage(chatId, { text: "❌ لم يتم العثور على قارئ." }, { quoted: msg });
         }
 
+        // Limit for carousel
         const topReciters = reciters.slice(0, 10);
 
         // Helper for Image
@@ -135,13 +174,6 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
                             display_text: `📄 ملف (PDF)`,
                             url: `https://quran.com/${targetSurahId}`
                         })
-                    },
-                    {
-                        "name": "quick_reply",
-                        "buttonParamsJson": JSON.stringify({
-                            display_text: `📖 قراءة (Text)`,
-                            id: `${settings.prefix}quranread ${targetSurahId}`
-                        })
                     }
                 ] :
                 [{
@@ -164,6 +196,29 @@ async function quranMp3Command(sock, chatId, msg, args, commands, userLang) {
                 nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({ buttons })
             };
         });
+
+        // Add "More Reciters" Card ONLY if targetSurahId is set
+        if (targetSurahId) {
+            cards.push({
+                body: proto.Message.InteractiveMessage.Body.fromObject({
+                    text: `🔍 *هل تبحث عن قارئ آخر؟*\n\nاضغط أدناه لعرض قائمة بجميع القراء المتوفرين.`
+                }),
+                header: proto.Message.InteractiveMessage.Header.fromObject({
+                    title: "🔍 المزيد من القراء",
+                    hasMediaAttachment: true,
+                    imageMessage: sharedImageMessage
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                    buttons: [{
+                        "name": "quick_reply",
+                        "buttonParamsJson": JSON.stringify({
+                            display_text: "📜 عرض كل القراء",
+                            id: `${settings.prefix}quranmp3 ${targetSurahId} --more`
+                        })
+                    }]
+                })
+            });
+        }
 
         const title = targetSurahId ? `🎧 *اختر القارئ لسورة ${targetSurahId}*` : "🕌 *قائمة القراء*";
         const botMsg = generateWAMessageFromContent(chatId, {
