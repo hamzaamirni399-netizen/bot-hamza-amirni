@@ -7,12 +7,15 @@ const { getSurahNumber } = require('../lib/quranUtils');
 const { setSession } = require('../lib/quranSession');
 
 async function quranCommand(sock, chatId, msg, args, commands, userLang) {
-    // If user provides arguments (e.g. .quran fatiha), redirect to quranmp3 for search/card view
+    // If user provides arguments (e.g. .quran fatiha), show format selection card
     if (args.length > 0) {
-        // commands is a Map
-        const quranMp3 = commands.get('quranmp3');
-        if (typeof quranMp3 === 'function') {
-            return quranMp3(sock, chatId, msg, args, commands, userLang);
+        const query = args.join(' ').trim();
+        const surahId = getSurahNumber(query);
+
+        if (surahId) {
+            // Show format selection card (Audio/Text/PDF)
+            const { showSurahFormatCard } = require('./quranmp3');
+            return showSurahFormatCard(sock, chatId, msg, surahId);
         }
     }
 
