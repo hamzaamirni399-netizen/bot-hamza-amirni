@@ -1,10 +1,41 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const cheerio = require('cheerio');
 const { sendWithChannelButton } = require('../lib/channelButton');
 const { getCommandDescription } = require('../lib/commandDescriptions');
 const { t } = require('../lib/language');
 const settings = require('../settings');
+
+async function getInstaTiktokVideo(url) {
+    const SITE_URL = 'https://instatiktok.com/';
+    const form = new URLSearchParams();
+    form.append('url', url);
+    form.append('platform', 'facebook');
+    form.append('siteurl', SITE_URL);
+
+    const res = await axios.post(`${SITE_URL}api`, form.toString(), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Origin': SITE_URL,
+            'Referer': SITE_URL,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        timeout: 10000
+    });
+
+    if (!res.data || res.data.status !== 'success') return null;
+
+    const $ = cheerio.load(res.data.html);
+    const links = [];
+    $('a.btn[href^="http"]').each((_, el) => {
+        const link = $(el).attr('href');
+        if (link && !links.includes(link)) links.push(link);
+    });
+
+    return links.length > 0 ? links.at(-1) : null;
+}
 
 async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
     try {
@@ -25,7 +56,19 @@ async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
             react: { text: '🔄', key: msg.key }
         });
 
-        // 1. Try Hanggts API (User's choice)
+        // 1. Try InstaTiktok API (User Provided)
+        try {
+            const fbvid = await getInstaTiktokVideo(url);
+            if (fbvid) {
+                console.log('✅ Found video using InstaTiktok');
+                await sendVideo(sock, chatId, fbvid, "InstaTiktok", msg, userLang);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ InstaTiktok failed, trying fallback...');
+        }
+
+        // 2. Try Hanggts API (User's choice)
         try {
             const apiUrl = `https://api.hanggts.xyz/download/facebook?url=${encodeURIComponent(url)}`;
             const response = await axios.get(apiUrl, { timeout: 15000 });
