@@ -37,6 +37,36 @@ async function getInstaTiktokVideo(url) {
     return links.length > 0 ? links.at(-1) : null;
 }
 
+// 🆕 New API Helper (User Provided Logic)
+async function getVideoFromFlyDev(url) {
+    try {
+        const payload = new URLSearchParams();
+        payload.append('url', url);
+
+        const response = await axios.post('https://facebook-video-downloader.fly.dev/app/main.php', payload.toString(), {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            },
+            timeout: 10000
+        });
+
+        const data = response.data;
+        if (data && data.success && data.links) {
+            // Try High Quality first, then Low Quality
+            const hd = data.links['Download High Quality'];
+            const sd = data.links['Download Low Quality'];
+            return {
+                video: hd || sd,
+                title: data.title
+            };
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
 async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
     try {
         const url = args.join(' ').trim();
@@ -55,6 +85,18 @@ async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
         await sock.sendMessage(chatId, {
             react: { text: '🔄', key: msg.key }
         });
+
+        // 0. 🆕 Try FlyDev API (User's suggested fix - Primary)
+        try {
+            const flyResult = await getVideoFromFlyDev(url);
+            if (flyResult && flyResult.video) {
+                console.log('✅ Found video using FlyDev API');
+                await sendVideo(sock, chatId, flyResult.video, "FlyDev API", msg, userLang);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ FlyDev API failed, trying fallback...');
+        }
 
         // 1. Try InstaTiktok API (User Provided)
         try {
