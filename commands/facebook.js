@@ -1,10 +1,103 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const cheerio = require('cheerio');
 const { sendWithChannelButton } = require('../lib/channelButton');
 const { getCommandDescription } = require('../lib/commandDescriptions');
 const { t } = require('../lib/language');
 const settings = require('../settings');
+
+async function getInstaTiktokVideo(url) {
+    const SITE_URL = 'https://instatiktok.com/';
+    const form = new URLSearchParams();
+    form.append('url', url);
+    form.append('platform', 'facebook');
+    form.append('siteurl', SITE_URL);
+
+    const res = await axios.post(`${SITE_URL}api`, form.toString(), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Origin': SITE_URL,
+            'Referer': SITE_URL,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        timeout: 10000
+    });
+
+    if (!res.data || res.data.status !== 'success') return null;
+
+    const $ = cheerio.load(res.data.html);
+    const links = [];
+    $('a.btn[href^="http"]').each((_, el) => {
+        const link = $(el).attr('href');
+        if (link && !links.includes(link)) links.push(link);
+    });
+
+    return links.length > 0 ? links.at(-1) : null;
+}
+
+// 🆕 New API Helper (User Provided Logic)
+async function getVideoFromFlyDev(url) {
+    try {
+        const payload = new URLSearchParams();
+        payload.append('url', url);
+
+        const response = await axios.post('https://facebook-video-downloader.fly.dev/app/main.php', payload.toString(), {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            },
+            timeout: 10000
+        });
+
+        const data = response.data;
+        if (data && data.success && data.links) {
+            // Try High Quality first, then Low Quality
+            const hd = data.links['Download High Quality'];
+            const sd = data.links['Download Low Quality'];
+            return {
+                video: hd || sd,
+                title: data.title
+            };
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// 🆕 FSaver Helper (Another User Suggestion)
+async function getVideoFromFsaver(url) {
+    try {
+        const fetchUrl = `https://fsaver.net/download/?url=${url}`;
+        const headers = {
+            "Upgrade-Insecure-Requests": "1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+            "sec-ch-ua": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"'
+        };
+
+        const response = await axios.get(fetchUrl, { headers, timeout: 10000 });
+        const html = response.data;
+
+        const $ = cheerio.load(html);
+        const videoSrc = $('.video__item').attr('src');
+
+        if (!videoSrc) return null;
+
+        // Ensure full URL
+        const finalUrl = videoSrc.startsWith('http') ? videoSrc : `https://fsaver.net${videoSrc}`;
+
+        return {
+            video: finalUrl,
+            title: "Facebook Video"
+        };
+    } catch (e) {
+        return null;
+    }
+}
 
 async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
     try {
@@ -25,7 +118,43 @@ async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
             react: { text: '🔄', key: msg.key }
         });
 
-        // 1. Try Hanggts API (User's choice)
+        // 0. 🆕 Try FlyDev API (User's suggested fix - Primary)
+        try {
+            const flyResult = await getVideoFromFlyDev(url);
+            if (flyResult && flyResult.video) {
+                console.log('✅ Found video using FlyDev API');
+                await sendVideo(sock, chatId, flyResult.video, "FlyDev API", msg, userLang);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ FlyDev API failed, trying fallback...');
+        }
+
+        // 0.5 🆕 Try FSaver (User's secondary suggestion)
+        try {
+            const fsaverResult = await getVideoFromFsaver(url);
+            if (fsaverResult && fsaverResult.video) {
+                console.log('✅ Found video using FSaver');
+                await sendVideo(sock, chatId, fsaverResult.video, "FSaver", msg, userLang);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ FSaver failed, trying fallback...');
+        }
+
+        // 1. Try InstaTiktok API (User Provided)
+        try {
+            const fbvid = await getInstaTiktokVideo(url);
+            if (fbvid) {
+                console.log('✅ Found video using InstaTiktok');
+                await sendVideo(sock, chatId, fbvid, "InstaTiktok", msg, userLang);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ InstaTiktok failed, trying fallback...');
+        }
+
+        // 2. Try Hanggts API (User's choice)
         try {
             const apiUrl = `https://api.hanggts.xyz/download/facebook?url=${encodeURIComponent(url)}`;
             const response = await axios.get(apiUrl, { timeout: 15000 });
@@ -96,6 +225,86 @@ async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
             }
         } catch (e) {
             console.log('⚠️ GuruAPI failed...');
+        }
+
+        // 4. Fallback: SnapSave API
+        try {
+            const apiUrl = `https://api.snapsave.app/v1/facebook?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, {
+                timeout: 15000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+
+            const data = response.data;
+            if (data && data.data) {
+                const fbvid = data.data.hd || data.data.sd || data.data.url;
+                if (fbvid) {
+                    console.log('✅ Found video using SnapSave API');
+                    await sendVideo(sock, chatId, fbvid, "SnapSave", msg, userLang);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('⚠️ SnapSave API failed...');
+        }
+
+        // 5. Fallback: SaveFrom.net API
+        try {
+            const apiUrl = `https://api.savefrom.net/api/facebook?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, {
+                timeout: 15000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = response.data;
+            if (data && data.url) {
+                const fbvid = Array.isArray(data.url) ? data.url[0]?.url || data.url[0] : data.url;
+                if (fbvid) {
+                    console.log('✅ Found video using SaveFrom API');
+                    await sendVideo(sock, chatId, fbvid, "SaveFrom", msg, userLang);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('⚠️ SaveFrom API failed...');
+        }
+
+        // 6. Fallback: Publer API (Robust)
+        try {
+            const apiUrl = `https://v12.api.shorts.zip/facebook?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, { timeout: 20000 });
+
+            const data = response.data;
+            if (data && data.success && data.data && data.data.length > 0) {
+                const fbvid = data.data[0].url;
+                if (fbvid) {
+                    console.log('✅ Found video using Publer API');
+                    await sendVideo(sock, chatId, fbvid, "Publer", msg, userLang);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('⚠️ Publer API failed...');
+        }
+
+        // 7. Fallback: 8388 API
+        try {
+            const apiUrl = `https://api.8388.8388.8388.8388.xyz/api/download/facebook?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, {
+                timeout: 20000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+
+            if (response.data && response.data.status && response.data.url) {
+                console.log('✅ Found video using 8388 API');
+                await sendVideo(sock, chatId, response.data.url, "8388 API", msg, userLang);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ 8388 API failed...');
         }
 
         throw new Error('All APIs failed to fetch video');

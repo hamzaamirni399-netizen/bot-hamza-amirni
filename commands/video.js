@@ -31,48 +31,54 @@ async function tryRequest(getter, attempts = 3) {
 // --- NEW SCRAMPERS ---
 
 async function getSiputzxVideo(url) {
-    const baseURL = 'https://backand-ytdl.siputzx.my.id/api';
-    const headers = {
-        'authority': 'backand-ytdl.siputzx.my.id',
-        'accept': '*/*',
-        'origin': 'https://yuyuyu.siputzx.my.id',
-        'referer': 'https://yuyuyu.siputzx.my.id/',
-        'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36'
-    };
+    try {
+        const baseURL = 'https://backand-ytdl.siputzx.my.id/api';
+        const headers = {
+            'authority': 'backand-ytdl.siputzx.my.id',
+            'accept': '*/*',
+            'origin': 'https://yuyuyu.siputzx.my.id',
+            'referer': 'https://yuyuyu.siputzx.my.id/',
+            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36'
+        };
 
-    const formData1 = new FormData();
-    formData1.append('url', url);
+        const formData1 = new FormData();
+        formData1.append('url', url);
 
-    const infoResponse = await axios.post(`${baseURL}/get-info`, formData1, {
-        headers: { ...headers, ...formData1.getHeaders() }
-    });
-    const videoInfo = infoResponse.data;
+        const infoResponse = await axios.post(`${baseURL}/get-info`, formData1, {
+            headers: { ...headers, ...formData1.getHeaders() },
+            timeout: 15000
+        });
+        const videoInfo = infoResponse.data;
 
-    const formData2 = new FormData();
-    formData2.append('id', videoInfo.id);
-    formData2.append('format', 'mp4');
-    formData2.append('video_format_id', '18');
-    formData2.append('audio_format_id', '251');
-    formData2.append('info', JSON.stringify(videoInfo));
+        const formData2 = new FormData();
+        formData2.append('id', videoInfo.id);
+        formData2.append('format', 'mp4');
+        formData2.append('video_format_id', '18');
+        formData2.append('audio_format_id', '251');
+        formData2.append('info', JSON.stringify(videoInfo));
 
-    const jobResponse = await axios.post(`${baseURL}/create_job`, formData2, {
-        headers: { ...headers, ...formData2.getHeaders() }
-    });
-    const jobId = jobResponse.data.job_id;
+        const jobResponse = await axios.post(`${baseURL}/create_job`, formData2, {
+            headers: { ...headers, ...formData2.getHeaders() },
+            timeout: 15000
+        });
+        const jobId = jobResponse.data.job_id;
 
-    for (let i = 0; i < 30; i++) {
-        const statusResponse = await axios.get(`${baseURL}/check_job/${jobId}`, { headers });
-        const status = statusResponse.data;
-        if (status.status === 'completed') {
-            return {
-                download: `https://backand-ytdl.siputzx.my.id${status.download_url}`,
-                title: videoInfo.title
-            };
+        for (let i = 0; i < 20; i++) {
+            const statusResponse = await axios.get(`${baseURL}/check_job/${jobId}`, { headers, timeout: 10000 });
+            const status = statusResponse.data;
+            if (status.status === 'completed') {
+                return {
+                    download: `https://backand-ytdl.siputzx.my.id${status.download_url}`,
+                    title: videoInfo.title
+                };
+            }
+            if (status.status === 'failed') break;
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
-        if (status.status === 'failed') break;
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        throw new Error('Siputzx conversion timeout');
+    } catch (err) {
+        throw new Error(`Siputzx: ${err.message}`);
     }
-    throw new Error('Siputzx conversion failed');
 }
 
 const savetube = {
@@ -95,43 +101,124 @@ const savetube = {
 };
 
 async function getSavetubeVideo(url, quality = '720') {
-    const videoId = (url.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/) || [])[1];
-    if (!videoId) throw new Error('Invalid YouTube ID');
+    try {
+        const videoId = (url.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/) || [])[1];
+        if (!videoId) throw new Error('Invalid YouTube ID');
 
-    const cdnRes = await axios.get(`${savetube.api.base}${savetube.api.cdn}`, { headers: savetube.headers });
-    const cdn = cdnRes.data.cdn;
+        const cdnRes = await axios.get(`${savetube.api.base}${savetube.api.cdn}`, { headers: savetube.headers, timeout: 10000 });
+        const cdn = cdnRes.data.cdn;
 
-    const infoRes = await axios.post(`https://${cdn}${savetube.api.info}`, { url: `https://www.youtube.com/watch?v=${videoId}` }, { headers: savetube.headers });
-    const decrypted = await savetube.crypto.decrypt(infoRes.data.data);
+        const infoRes = await axios.post(`https://${cdn}${savetube.api.info}`, { url: `https://www.youtube.com/watch?v=${videoId}` }, { headers: savetube.headers, timeout: 15000 });
+        const decrypted = await savetube.crypto.decrypt(infoRes.data.data);
 
-    const dlRes = await axios.post(`https://${cdn}${savetube.api.download}`, {
-        id: videoId,
-        downloadType: 'video',
-        quality: quality,
-        key: decrypted.key
-    }, { headers: savetube.headers });
+        const dlRes = await axios.post(`https://${cdn}${savetube.api.download}`, {
+            id: videoId,
+            downloadType: 'video',
+            quality: quality,
+            key: decrypted.key
+        }, { headers: savetube.headers, timeout: 15000 });
 
-    if (dlRes.data?.data?.downloadUrl) {
-        return { download: dlRes.data.data.downloadUrl, title: decrypted.title };
+        if (dlRes.data?.data?.downloadUrl) {
+            return { download: dlRes.data.data.downloadUrl, title: decrypted.title };
+        }
+        throw new Error('No download URL');
+    } catch (err) {
+        throw new Error(`Savetube: ${err.message}`);
     }
-    throw new Error('Savetube failed');
 }
 
 async function getSavenowVideo(url, quality = '720') {
-    const res = await axios.get('https://p.savenow.to/ajax/download.php', {
-        params: { copyright: '0', format: quality, url, api: 'dfcb6d76f2f6a9894gjkege8a4ab232222' },
-        headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://y2down.cc/', Origin: 'https://y2down.cc' }
-    });
+    try {
+        const res = await axios.get('https://p.savenow.to/ajax/download.php', {
+            params: { copyright: '0', format: quality, url, api: 'dfcb6d76f2f6a9894gjkege8a4ab232222' },
+            headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://y2down.cc/', Origin: 'https://y2down.cc' },
+            timeout: 15000
+        });
 
-    const progressUrl = res.data?.progress_url;
-    if (!progressUrl) throw new Error('Savenow failed to start');
+        const progressUrl = res.data?.progress_url;
+        if (!progressUrl) throw new Error('No progress URL');
 
-    for (let i = 0; i < 30; i++) {
-        const status = await axios.get(progressUrl);
-        if (status.data?.download_url) return { download: status.data.download_url, title: res.data.info?.title || 'Video' };
-        await new Promise(r => setTimeout(r, 2000));
+        for (let i = 0; i < 20; i++) {
+            const status = await axios.get(progressUrl, { timeout: 10000 });
+            if (status.data?.download_url) return { download: status.data.download_url, title: res.data.info?.title || 'Video' };
+            await new Promise(r => setTimeout(r, 2000));
+        }
+        throw new Error('Timeout');
+    } catch (err) {
+        throw new Error(`Savenow: ${err.message}`);
     }
-    throw new Error('Savenow timeout');
+}
+
+// NEW: Cobalt API
+async function getCobaltVideo(url) {
+    try {
+        const res = await axios.post('https://api.cobalt.tools/api/json', {
+            url: url,
+            vCodec: 'h264',
+            vQuality: '720',
+            aFormat: 'mp3',
+            filenamePattern: 'classic',
+            isAudioOnly: false
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            },
+            timeout: 20000
+        });
+
+        if (res.data?.url) {
+            return { download: res.data.url, title: 'Video' };
+        }
+        throw new Error('No URL returned');
+    } catch (err) {
+        throw new Error(`Cobalt: ${err.message}`);
+    }
+}
+
+// NEW: Y2Mate Alternative
+async function getY2MateVideo(url) {
+    try {
+        const videoId = (url.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/) || [])[1];
+        if (!videoId) throw new Error('Invalid ID');
+
+        const res = await axios.post('https://www.y2mate.com/mates/analyzeV2/ajax',
+            `k_query=${encodeURIComponent(url)}&k_page=home&hl=en&q_auto=0`,
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'Mozilla/5.0',
+                    'Referer': 'https://www.y2mate.com/'
+                },
+                timeout: 15000
+            }
+        );
+
+        const links = res.data?.links?.mp4;
+        if (links && Object.keys(links).length > 0) {
+            const quality = links['360'] || links['480'] || links['720'] || Object.values(links)[0];
+            const k = quality.k;
+
+            const dlRes = await axios.post('https://www.y2mate.com/mates/convertV2/index',
+                `vid=${videoId}&k=${k}`,
+                {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'User-Agent': 'Mozilla/5.0'
+                    },
+                    timeout: 20000
+                }
+            );
+
+            if (dlRes.data?.dlink) {
+                return { download: dlRes.data.dlink, title: res.data.title || 'Video' };
+            }
+        }
+        throw new Error('No download link');
+    } catch (err) {
+        throw new Error(`Y2Mate: ${err.message}`);
+    }
 }
 
 // --- LEGACY FALLBACKS ---
@@ -203,9 +290,11 @@ async function videoCommand(sock, chatId, msg, args, commands, userLang, match) 
 
         // Try methods sequentially
         const methods = [
-            () => getSiputzxVideo(videoUrl),
+            () => getCobaltVideo(videoUrl),
+            () => getY2MateVideo(videoUrl),
             () => getSavetubeVideo(videoUrl),
             () => getSavenowVideo(videoUrl),
+            () => getSiputzxVideo(videoUrl),
             () => getYupraVideoByUrl(videoUrl),
             () => getOkatsuVideoByUrl(videoUrl)
         ];

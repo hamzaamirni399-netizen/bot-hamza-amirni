@@ -81,15 +81,17 @@ const silencePatterns = [
     'Closing session',
     'Closing open session',
     'Conflict',
-    'Stream Errored'
+    'Stream Errored',
+    'Removing old closed session',
+    'Replacing old closed session'
 ];
 
 function shouldSilence(args) {
-    const msg = args[0];
-    if (typeof msg === 'string') {
-        return silencePatterns.some(pattern => msg.includes(pattern));
-    }
-    return false;
+    if (!args || !args.length) return false;
+    // Check if any argument matches the silence patterns
+    const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+
+    return silencePatterns.some(pattern => msg.includes(pattern));
 }
 
 console.error = function (...args) {
