@@ -40,12 +40,30 @@ async function reminiCommand(sock, chatId, msg, args, commands, userLang) {
         if (!imageUrl) throw new Error("Failed to upload image for processing.");
 
         // Call Vreden Remini API
-        const apiUrl = `https://api.vreden.my.id/api/remini?url=${encodeURIComponent(imageUrl)}`;
-        const response = await axios.get(apiUrl, { timeout: 60000 });
+        let resultUrl = null;
+        try {
+            const apiUrl = `https://api.vreden.my.id/api/remini?url=${encodeURIComponent(imageUrl)}`;
+            const response = await axios.get(apiUrl, { timeout: 60000 });
+            if (response.data && response.data.status && response.data.result) {
+                resultUrl = response.data.result;
+            }
+        } catch (e) {
+            console.log("Remini primary failed, trying fallback...");
+        }
 
-        if (response.data && response.data.status && response.data.result) {
-            const resultUrl = response.data.result;
+        // Fallback to Siputzx
+        if (!resultUrl) {
+            try {
+                const response = await axios.get(`https://api.siputzx.my.id/api/ai/remini?url=${encodeURIComponent(imageUrl)}`);
+                if (response.data?.status) {
+                    resultUrl = response.data.data.url || response.data.data;
+                }
+            } catch (e) {
+                console.error("Remini fallback failed:", e.message);
+            }
+        }
 
+        if (resultUrl) {
             await sock.sendMessage(chatId, {
                 image: { url: resultUrl },
                 caption: `✨ *Successfully Enhanced!* ✅\n\n> ᴘᴏᴡᴇʀᴇᴅ ʙʏ ʜᴀᴍᴢᴀ ᴀᴍɪʀɴɪ`
@@ -53,7 +71,7 @@ async function reminiCommand(sock, chatId, msg, args, commands, userLang) {
 
             await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
         } else {
-            throw new Error("API returned an invalid response.");
+            throw new Error("All Remini APIs failed.");
         }
 
     } catch (error) {

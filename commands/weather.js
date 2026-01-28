@@ -1,7 +1,7 @@
 const axios = require("axios");
-const { sendWithChannelButton } = require("../lib/channelButton");
 const settings = require("../settings");
 const { t } = require("../lib/language");
+const { generateWAMessageContent, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
 
 function getWeatherEmoji(weather) {
     const map = {
@@ -29,24 +29,23 @@ module.exports = async function weatherCommand(sock, chatId, msg, args) {
         const city = args.join(' ').trim();
 
         if (!city) {
-            const helpMsg = t('weather.help', { prefix: settings.prefix }) + `\n\n⚔️ ${settings.botName}`;
-            return await sendWithChannelButton(sock, chatId, helpMsg, msg);
+            return await sock.sendMessage(chatId, { text: t('weather.help', { prefix: settings.prefix }) }, { quoted: msg });
         }
 
-        await sendWithChannelButton(sock, chatId, t('weather.fetching', { city }), msg);
+        await sock.sendMessage(chatId, { react: { text: "☁️", key: msg.key } });
 
         const apiUrl = `https://apis.davidcyriltech.my.id/weather?city=${encodeURIComponent(city)}`;
         const response = await axios.get(apiUrl);
         const w = response.data;
 
         if (!w.success || !w.data) {
-            return await sendWithChannelButton(sock, chatId, t('weather.not_found', { city }), msg);
+            return await sock.sendMessage(chatId, { text: t('weather.not_found', { city }) }, { quoted: msg });
         }
 
         const d = w.data;
         const emoji = getWeatherEmoji(d.weather);
 
-        const weatherText = t('weather.result', {
+        const weatherBody = t('weather.result', {
             location: d.location,
             country: d.country,
             temp: d.temperature,
@@ -57,12 +56,60 @@ module.exports = async function weatherCommand(sock, chatId, msg, args) {
             wind: d.wind_speed,
             pressure: d.pressure,
             time: new Date().toLocaleTimeString('ar-MA')
-        }) + `\n⚔️ ${settings.botName}`;
+        });
 
-        await sock.sendMessage(chatId, { text: weatherText }, { quoted: msg });
+        const weatherImages = [
+            "https://images.unsplash.com/photo-1592210633464-a7db0536f0f9?q=80&w=1000&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1504608524841-42fe6f032b4b?q=80&w=1000&auto=format&fit=crop",
+            "https://images.unsplash.com/photo-1530908295418-a12e326966ba?q=80&w=1000&auto=format&fit=crop"
+        ];
+        const randomWeatherImg = weatherImages[Math.floor(Math.random() * weatherImages.length)];
+
+        const genImage = await generateWAMessageContent(
+            { image: { url: randomWeatherImg } },
+            { upload: sock.waUploadToServer }
+        );
+
+        const card = {
+            body: proto.Message.InteractiveMessage.Body.fromObject({
+                text: weatherBody
+            }),
+            footer: proto.Message.InteractiveMessage.Footer.fromObject({
+                text: `乂 ${settings.botName} 🌍`
+            }),
+            header: proto.Message.InteractiveMessage.Header.fromObject({
+                title: `حالة الطقس في ${d.location}`,
+                hasMediaAttachment: true,
+                imageMessage: genImage.imageMessage
+            }),
+            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                buttons: [
+                    {
+                        "name": "quick_reply",
+                        "buttonParamsJson": JSON.stringify({ display_text: "تحديث 🔄", id: `${settings.prefix}weather ${city}` })
+                    }
+                ]
+            })
+        };
+
+        const interactiveMsg = generateWAMessageFromContent(chatId, {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        ...card,
+                        carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+                            cards: [card]
+                        })
+                    })
+                }
+            }
+        }, { quoted: msg });
+
+        await sock.relayMessage(chatId, interactiveMsg.message, { messageId: interactiveMsg.key.id });
+        await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
 
     } catch (error) {
-        console.error("Error fetching weather:", error);
-        await sendWithChannelButton(sock, chatId, t('weather.error'), msg);
+        console.error("Weather Error:", error);
+        await sock.sendMessage(chatId, { text: "❌ حدث خطأ أثناء جلب الطقس." }, { quoted: msg });
     }
 };

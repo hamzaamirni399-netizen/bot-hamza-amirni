@@ -13,7 +13,7 @@ async function instagramCommand(sock, chatId, message, args, commands, userLang)
 
         // ✅ Step 1: Use passed args
         let url = args.join(' ').trim();
- 
+
         // ✅ Step 2: If no args, fallback to quoted message text
         if (!url && message.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
             const quoted = message.message.extendedTextMessage.contextInfo.quotedMessage;
@@ -58,7 +58,20 @@ async function instagramCommand(sock, chatId, message, args, commands, userLang)
         await sock.sendMessage(chatId, { react: { text: "🔄", key: message.key } });
 
         // ✅ Step 5: Fetch media
-        const downloadData = await igdl(url);
+        let downloadData = await igdl(url).catch(() => null);
+
+        // Fallback to Vreden API if ruhend fails
+        if (!downloadData?.data?.length) {
+            try {
+                const vredenRes = await axios.get(`https://api.vreden.web.id/api/igdl?url=${encodeURIComponent(url)}`);
+                if (vredenRes.data?.status && vredenRes.data.result?.length) {
+                    downloadData = { data: vredenRes.data.result.map(u => ({ url: u })) };
+                }
+            } catch (e) {
+                console.error("Instagram fallback failed:", e.message);
+            }
+        }
+
         if (!downloadData?.data?.length) {
             return await sock.sendMessage(
                 chatId,

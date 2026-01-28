@@ -1,6 +1,6 @@
 const axios = require('axios');
-const { sendWithChannelButton } = require('../lib/channelButton');
 const settings = require('../settings');
+const { generateWAMessageContent, generateWAMessageFromContent, proto } = require('@whiskeysockets/baileys');
 
 // Utility: split long lyrics into safe chunks for WhatsApp
 function chunkText(text, size = 3000) {
@@ -15,52 +15,75 @@ async function lyricsCommand(sock, chatId, msg, args) {
     const songTitle = args.join(' ').trim();
 
     if (!songTitle) {
-        const helpMsg = `🎵 *البحث عن كلمات الأغاني* 🎵
-
-🔹 *الاستخدام:*
-${settings.prefix}lyrics [اسم الأغنية]
-${settings.prefix}kalimat [اسم الأغنية]
-
-📝 *أمثلة:*
-• ${settings.prefix}lyrics سعد المجرد
-• ${settings.prefix}kalimat اغنية مغربية
-• ${settings.prefix}lyrics Perfect Ed Sheeran
-
-⚔️ ${settings.botName}`;
-
-        return await sendWithChannelButton(sock, chatId, helpMsg, msg);
+        const helpMsg = `🎵 *البحث عن كلمات الأغاني* 🎵\n\n🔹 *الاستخدام:* ${settings.prefix}lyrics [اسم الأغنية]`;
+        return await sock.sendMessage(chatId, { text: helpMsg }, { quoted: msg });
     }
 
     try {
-        await sendWithChannelButton(sock, chatId, `⏳ جاري البحث عن كلمات أغنية "${songTitle}"...`, msg);
+        await sock.sendMessage(chatId, { react: { text: "🔍", key: msg.key } });
 
         const apiUrl = `https://apis.davidcyriltech.my.id/lyrics3?song=${encodeURIComponent(songTitle)}`;
         const response = await axios.get(apiUrl, { timeout: 15000 });
         const json = response.data;
 
         if (!json.success || !json.result || !json.result.lyrics) {
-            return await sendWithChannelButton(sock, chatId, `❌ عذراً، لم أتمكن من العثور على كلمات الأغنية لـ "${songTitle}".`, msg);
+            return await sock.sendMessage(chatId, { text: `❌ عذراً، لم أتمكن من العثور على كلمات الأغنية لـ "${songTitle}".` }, { quoted: msg });
         }
 
         const { song, artist, lyrics } = json.result;
 
-        const header = `🎶 *كلمات الأغنية* 🎶\n\n` +
-            `📌 *العنوان:* ${song || songTitle}\n` +
-            `👤 *الفنان:* ${artist || 'غير معروف'}\n\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        const genImage = await generateWAMessageContent(
+            { image: { url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=1000&auto=format&fit=crop' } },
+            { upload: sock.waUploadToServer }
+        );
 
-        await sock.sendMessage(chatId, { text: header }, { quoted: msg });
+        const card = {
+            body: proto.Message.InteractiveMessage.Body.fromObject({
+                text: `🎶 *الأغنية:* ${song || songTitle}\n👤 *الفنان:* ${artist || 'غير معروف'}`
+            }),
+            footer: proto.Message.InteractiveMessage.Footer.fromObject({
+                text: `乂 ${settings.botName} 🎵`
+            }),
+            header: proto.Message.InteractiveMessage.Header.fromObject({
+                title: "كلمات الأغنية",
+                hasMediaAttachment: true,
+                imageMessage: genImage.imageMessage
+            }),
+            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                buttons: [
+                    {
+                        "name": "quick_reply",
+                        "buttonParamsJson": JSON.stringify({ display_text: "بحث عن أغنية أخرى 🔎", id: `${settings.prefix}lyrics ` })
+                    }
+                ]
+            })
+        };
+
+        const interactiveMsg = generateWAMessageFromContent(chatId, {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        ...card,
+                        carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+                            cards: [card]
+                        })
+                    })
+                }
+            }
+        }, { quoted: msg });
+
+        await sock.relayMessage(chatId, interactiveMsg.message, { messageId: interactiveMsg.key.id });
 
         const parts = chunkText(lyrics);
         for (const part of parts) {
             await sock.sendMessage(chatId, { text: part });
         }
 
-        await sock.sendMessage(chatId, { text: `\n⚔️ ${settings.botName}` });
+        await sock.sendMessage(chatId, { react: { text: "✅", key: msg.key } });
 
     } catch (error) {
-        console.error('Error in lyrics command:', error);
-        await sendWithChannelButton(sock, chatId, `❌ عفواً، حدث خطأ أثناء جلب كلمات الأغنية. حاول لاحقاً.`, msg);
+        console.error('Lyrics Error:', error);
+        await sock.sendMessage(chatId, { text: `❌ حدث خطأ أثناء جلب كلمات الأغنية.` }, { quoted: msg });
     }
 }
 

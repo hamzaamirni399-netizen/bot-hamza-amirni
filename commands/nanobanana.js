@@ -45,9 +45,10 @@ async function processImageAI(filePath, prompt) {
         };
 
         const create = await axios.post(
-            "https://aienhancer.ai/api/v1/k/image-enhance/create",
+            "https://aienhancer.ai/api/v1/r/image-enhance/create",
             {
                 model: 2,
+                function: "image-edit",
                 image: `data:image/jpeg;base64,${img}`,
                 settings
             },

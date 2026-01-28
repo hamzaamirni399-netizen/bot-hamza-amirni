@@ -72,28 +72,67 @@ async function tiktokCommand(sock, chatId, message, args, commands, userLang) {
             let finalUrl = await resolveTikTokUrl(url);
 
             // Use API for download
-            const apiUrl = `https://adiza-tiktok-downloader.matrixzat99.workers.dev/?url=${encodeURIComponent(finalUrl)}`;
-            const apiResponse = await axios.get(apiUrl);
+            let videoUrl = null;
+            let author = 'N/A';
+            let title = 'N/A';
 
-            if (apiResponse.data && apiResponse.data.success && apiResponse.data.download) {
-                const videoUrl = apiResponse.data.download.video_hd || apiResponse.data.download.video_sd;
+            // 1. Primary API
+            try {
+                const apiUrl = `https://adiza-tiktok-downloader.matrixzat99.workers.dev/?url=${encodeURIComponent(finalUrl)}`;
+                const apiResponse = await axios.get(apiUrl, { timeout: 10000 });
+                if (apiResponse.data?.success && apiResponse.data.download) {
+                    videoUrl = apiResponse.data.download.video_hd || apiResponse.data.download.video_sd;
+                    author = apiResponse.data.tiktok_info?.author || 'N/A';
+                    title = apiResponse.data.tiktok_info?.title || 'N/A';
+                }
+            } catch (e) {
+                console.log("TikTok primary failed, trying fallback 1...");
+            }
+
+            // 2. Fallback 1: Siputzx
+            if (!videoUrl) {
+                try {
+                    const siputzRes = await axios.get(`https://api.siputzx.my.id/api/d/tiktok?url=${encodeURIComponent(finalUrl)}`);
+                    if (siputzRes.data?.status) {
+                        videoUrl = siputzRes.data.data.video || siputzRes.data.data.url;
+                        author = siputzRes.data.data.author || 'N/A';
+                        title = siputzRes.data.data.title || 'N/A';
+                    }
+                } catch (e) {
+                    console.log("TikTok fallback 1 failed, trying fallback 2...");
+                }
+            }
+
+            // 3. Fallback 2: Vreden
+            if (!videoUrl) {
+                try {
+                    const vredenRes = await axios.get(`https://api.vreden.web.id/api/tiktok?url=${encodeURIComponent(finalUrl)}`);
+                    if (vredenRes.data?.status) {
+                        videoUrl = vredenRes.data.result.video;
+                        author = vredenRes.data.result.author || 'N/A';
+                        title = vredenRes.data.result.description || 'N/A';
+                    }
+                } catch (e) {
+                    console.error("TikTok fallback 2 failed:", e.message);
+                }
+            }
+
+            if (videoUrl) {
                 const caption = t('tiktok.caption', {
                     botName: settings.botName,
-                    title: apiResponse.data.tiktok_info.title || 'N/A',
-                    author: apiResponse.data.tiktok_info.author || 'N/A',
+                    title: title,
+                    author: author,
                     url: finalUrl
                 }, userLang);
 
-                if (videoUrl) {
-                    await sock.sendMessage(chatId, {
-                        video: { url: videoUrl },
-                        mimetype: "video/mp4",
-                        caption
-                    }, { quoted: message });
+                await sock.sendMessage(chatId, {
+                    video: { url: videoUrl },
+                    mimetype: "video/mp4",
+                    caption
+                }, { quoted: message });
 
-                    await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
-                    return;
-                }
+                await sock.sendMessage(chatId, { react: { text: '✅', key: message.key } });
+                return;
             }
 
             await sock.sendMessage(chatId, {

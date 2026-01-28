@@ -72,16 +72,23 @@ async function scheduleCommand(sock, chatId, message, args) {
             const openTime = args[1];
             const closeTime = args[2];
 
-            // Validate time format
             const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
             if (!timeRegex.test(openTime) || !timeRegex.test(closeTime)) {
                 return await sendWithChannelButton(sock, chatId,
-                    `❌ صيغة الوقت غير صحيحة!\n\n✅ الصيغة الصحيحة: HH:MM (24 ساعة)\n\nأمثلة صحيحة:\n• 08:00\n• 14:30\n• 22:00\n\nأمثلة خاطئة:\n• 8:00 (يجب 08:00)\n• 25:00 (الساعة غير صحيحة)\n• 14:60 (الدقيقة غير صحيحة)`,
+                    `❌ صيغة الوقت غير صحيحة!\n\n✅ الصيغة الصحيحة: HH:MM (24 ساعة)\n\nأمثلة صحيحة:\n• 08:00\n• 14:30\n• 22:00\n\nأمثلة خاطئة:\n• 25:00 (الساعة غير صحيحة)\n• 14:60 (الدقيقة غير صحيحة)`,
                     message);
             }
 
+            // Normalize HH:MM (pad with zero if needed)
+            const normalizeTime = (t) => {
+                let [h, m] = t.split(':');
+                return `${h.padStart(2, '0')}:${m}`;
+            };
+            const normalizedOpen = normalizeTime(openTime);
+            const normalizedClose = normalizeTime(closeTime);
+
             // Set the schedule
-            const success = setGroupSchedule(chatId, openTime, closeTime);
+            const success = setGroupSchedule(chatId, normalizedOpen, normalizedClose);
 
             if (success) {
                 const successMsg = `✅ *تم تفعيل الجدولة التلقائية بنجاح!*\n\n`;

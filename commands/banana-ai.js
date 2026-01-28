@@ -36,6 +36,7 @@ async function bananaAI(imageBuffer, prompt) {
         'https://aienhancer.ai/api/v1/r/image-enhance/create',
         {
             model: 2,
+            function: "image-enhance",
             image: `data:image/jpeg;base64,${imgBase64}`,
             settings
         },
