@@ -143,6 +143,41 @@ async function facebookCommand(sock, chatId, msg, args, commands, userLang) {
             console.log('⚠️ SaveFrom API failed...');
         }
 
+        // 6. Fallback: Publer API (Robust)
+        try {
+            const apiUrl = `https://v12.api.shorts.zip/facebook?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, { timeout: 20000 });
+
+            const data = response.data;
+            if (data && data.success && data.data && data.data.length > 0) {
+                const fbvid = data.data[0].url;
+                if (fbvid) {
+                    console.log('✅ Found video using Publer API');
+                    await sendVideo(sock, chatId, fbvid, "Publer", msg, userLang);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('⚠️ Publer API failed...');
+        }
+
+        // 7. Fallback: 8388 API
+        try {
+            const apiUrl = `https://api.8388.8388.8388.8388.xyz/api/download/facebook?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, {
+                timeout: 20000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+
+            if (response.data && response.data.status && response.data.url) {
+                console.log('✅ Found video using 8388 API');
+                await sendVideo(sock, chatId, response.data.url, "8388 API", msg, userLang);
+                return;
+            }
+        } catch (e) {
+            console.log('⚠️ 8388 API failed...');
+        }
+
         throw new Error('All APIs failed to fetch video');
 
     } catch (error) {
